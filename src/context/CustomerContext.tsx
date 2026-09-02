@@ -47,8 +47,10 @@ interface CustomerContextType {
   users: UserAccount[];
   currentUser: UserAccount;
   isAuthenticated: boolean;
+  pendingLoginEmail: string | null;
+  setPendingLoginEmail: (email: string | null) => void;
   loginWithEmail: (email: string) => { success: boolean; user?: UserAccount; error?: string };
-  logout: () => void;
+  logout: (prefillEmail?: string) => void;
   setCurrentUserId: (id: string) => void;
   addCsmUser: (data: { name: string; email: string; title: string }) => Promise<UserAccount>;
   updateCsmUser: (id: string, partial: Partial<UserAccount>) => void;
@@ -222,6 +224,8 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     return true; // Default logged in for existing session
   });
 
+  const [pendingLoginEmail, setPendingLoginEmail] = useState<string | null>(null);
+
   // Master customers list (all customers in the system)
   const [allCustomers, setAllCustomers] = useState<Customer[]>(() => {
     try {
@@ -390,6 +394,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     setCurrentUserIdState(matchedUser.id);
     setIsAuthenticated(true);
+    setPendingLoginEmail(null);
     try {
       localStorage.setItem(CURRENT_USER_KEY, matchedUser.id);
       localStorage.setItem(AUTH_STATE_KEY, 'true');
@@ -398,8 +403,13 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     return { success: true, user: matchedUser };
   };
 
-  const logout = () => {
+  const logout = (prefillEmail?: string) => {
     setIsAuthenticated(false);
+    if (prefillEmail) {
+      setPendingLoginEmail(prefillEmail);
+    } else {
+      setPendingLoginEmail(null);
+    }
     try {
       localStorage.setItem(AUTH_STATE_KEY, 'false');
     } catch {}
@@ -1323,6 +1333,8 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         users,
         currentUser,
         isAuthenticated,
+        pendingLoginEmail,
+        setPendingLoginEmail,
         loginWithEmail,
         logout,
         setCurrentUserId,

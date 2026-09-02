@@ -14,10 +14,17 @@ import {
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
-  const { users, loginWithEmail } = useCustomerContext();
-  const [emailInput, setEmailInput] = useState('');
+  const { users, loginWithEmail, pendingLoginEmail, setPendingLoginEmail } = useCustomerContext();
+  const [emailInput, setEmailInput] = useState(() => pendingLoginEmail || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sync if pendingLoginEmail is updated externally
+  React.useEffect(() => {
+    if (pendingLoginEmail) {
+      setEmailInput(pendingLoginEmail);
+    }
+  }, [pendingLoginEmail]);
 
   const adminUser = users.find((u) => u.role === 'Admin');
   const csmUsers = users.filter((u) => u.role === 'CSM' && u.status === 'Active');
@@ -65,11 +72,34 @@ export const LoginView: React.FC = () => {
         {/* Form Body */}
         <div className="p-6 sm:p-7 space-y-5">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Sign in to your account</h2>
+            <h2 className="text-base font-bold text-slate-900">
+              {pendingLoginEmail ? 'Switch Account / Sign In' : 'Sign in to your account'}
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Enter your authorized Progist email ID (Admin or assigned CSM).
             </p>
           </div>
+
+          {pendingLoginEmail && (
+            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl text-xs flex items-center justify-between gap-2 animate-in fade-in">
+              <div className="flex items-center gap-2 min-w-0">
+                <Users className="w-4 h-4 text-blue-600 shrink-0" />
+                <span className="truncate">
+                  Switching to: <strong>{pendingLoginEmail}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingLoginEmail(null);
+                  setEmailInput('');
+                }}
+                className="text-[11px] text-blue-700 hover:text-blue-900 font-bold underline shrink-0 cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           {errorMsg && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in">

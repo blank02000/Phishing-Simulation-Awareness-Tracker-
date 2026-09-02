@@ -191,8 +191,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               </div>
 
               <div className="py-2">
-                <div className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Switch Active Account
+                <div className="px-3 flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Switch Account
+                  </span>
+                  <span className="text-[10px] text-blue-600 font-medium">Via Login Page</span>
                 </div>
                 <div className="space-y-1 max-h-56 overflow-y-auto">
                   {users.map((user) => {
@@ -202,14 +205,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                         key={user.id}
                         type="button"
                         onClick={() => {
-                          setCurrentUserId(user.id);
                           setShowUserMenu(false);
+                          logout(user.email);
                         }}
                         className={`w-full px-3 py-2 rounded-xl text-left flex items-center justify-between transition-colors ${
                           isSelected
                             ? 'bg-slate-100 font-semibold'
                             : 'hover:bg-slate-50 text-slate-700'
                         }`}
+                        title={`Log out and switch to ${user.name}'s account via login screen`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div
@@ -236,7 +240,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                           </div>
                         </div>
 
-                        {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0 ml-2" />}
+                        {isSelected ? (
+                          <span className="text-[10px] font-bold text-blue-600 shrink-0 ml-2 bg-blue-50 px-1.5 py-0.5 rounded">
+                            Current
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 shrink-0 ml-2 font-medium">
+                            Switch →
+                          </span>
+                        )}
                       </button>
                     );
                   })}

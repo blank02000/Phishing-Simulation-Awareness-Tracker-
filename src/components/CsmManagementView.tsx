@@ -18,6 +18,7 @@ import {
   Search,
   Filter,
   Eye,
+  LogIn,
 } from 'lucide-react';
 
 interface CsmManagementViewProps {
@@ -37,7 +38,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
     updateCsmUser,
     toggleCsmStatus,
     assignCustomerCsm,
-    setCurrentUserId,
+    logout,
     referenceDate,
     dueSoonDays,
   } = useCustomerContext();
@@ -466,16 +467,16 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
                   )}
                 </div>
 
-                {/* Switch to this account / Preview View */}
+                {/* Switch to this account / Login page */}
                 {!isCurrentUser ? (
                   <button
                     type="button"
-                    onClick={() => setCurrentUserId(user.id)}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-900 hover:text-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
-                    title={`Switch session to view app as ${user.name}`}
+                    onClick={() => logout(user.email)}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-900 hover:text-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title={`Log out and switch to ${user.name}'s account via login screen`}
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View as User</span>
+                    <LogIn className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Switch Account</span>
                   </button>
                 ) : (
                   <span className="text-[11px] text-blue-600 font-bold px-2 py-1 bg-blue-50 rounded-lg">
