@@ -1,6 +1,6 @@
 {
-  "name": "Phishing Simulation \u0026 Awareness Tracker",
-  "description": "Internal operations tool for scheduling, tracking, and reviewing customer annual cybersecurity drills and phishing simulations.",
+  "name": "CyberDrill — Phishing Simulation & Awareness Tracker",
+  "description": "Internal operations tool for managing cybersecurity phishing simulations, quarterly drill schedules, and annual compliance for customer accounts.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

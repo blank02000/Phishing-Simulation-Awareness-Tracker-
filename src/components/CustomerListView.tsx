@@ -19,6 +19,7 @@ import {
   Building,
   UserCheck,
   FileSpreadsheet,
+  Edit3,
 } from 'lucide-react';
 
 interface CustomerListViewProps {
@@ -26,6 +27,7 @@ interface CustomerListViewProps {
   onOpenCreateCustomer: () => void;
   onOpenBulkUpload?: () => void;
   onMarkDrillComplete: (customer: Customer, drill: DrillRecord) => void;
+  onOpenEditCustomer?: (customer: Customer, initialTab?: 'profile' | 'dates' | 'drills') => void;
 }
 
 export const CustomerListView: React.FC<CustomerListViewProps> = ({
@@ -33,6 +35,7 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
   onOpenCreateCustomer,
   onOpenBulkUpload,
   onMarkDrillComplete,
+  onOpenEditCustomer,
 }) => {
   const {
     customers,
@@ -384,6 +387,17 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
                             >
                               <PlayCircle className="w-3.5 h-3.5 text-emerald-600" />
                               <span className="hidden lg:inline">Complete</span>
+                            </button>
+                          )}
+                          {onOpenEditCustomer && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenEditCustomer(customer, 'profile')}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded font-semibold text-xs transition-colors flex items-center gap-1 shadow-2xs"
+                              title="Edit Customer Profile & Drill Dates (Admin & CSM)"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Edit</span>
                             </button>
                           )}
                           <button

@@ -19,6 +19,7 @@ import { CsmManagementView } from './components/CsmManagementView';
 import { SettingsView } from './components/SettingsView';
 
 import { CreateCustomerModal } from './components/modals/CreateCustomerModal';
+import { EditCustomerModal } from './components/modals/EditCustomerModal';
 import { CompleteDrillModal } from './components/modals/CompleteDrillModal';
 import { EditDrillModal } from './components/modals/EditDrillModal';
 import { ReviewMeetingModal } from './components/modals/ReviewMeetingModal';
@@ -59,6 +60,16 @@ function MainApp() {
   // Modal States
   const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+
+  const [editCustomerState, setEditCustomerState] = useState<{
+    isOpen: boolean;
+    customer: Customer | null;
+    initialTab?: 'profile' | 'dates' | 'drills';
+  }>({
+    isOpen: false,
+    customer: null,
+    initialTab: 'profile',
+  });
 
   const [completeDrillState, setCompleteDrillState] = useState<{
     isOpen: boolean;
@@ -133,6 +144,17 @@ function MainApp() {
   const handleSelectCustomer = (customerId: string) => {
     setSelectedCustomerId(customerId);
     setActiveTab('customers');
+  };
+
+  const handleOpenEditCustomer = (
+    customer: Customer,
+    initialTab: 'profile' | 'dates' | 'drills' = 'profile'
+  ) => {
+    setEditCustomerState({
+      isOpen: true,
+      customer,
+      initialTab,
+    });
   };
 
   const handleOpenCompleteDrill = (customer: Customer, drill: DrillRecord) => {
@@ -274,6 +296,7 @@ function MainApp() {
                     onOpenCreateCustomer={() => setIsCreateCustomerOpen(true)}
                     onOpenBulkUpload={() => setIsBulkUploadOpen(true)}
                     onMarkDrillComplete={handleOpenCompleteDrill}
+                    onOpenEditCustomer={handleOpenEditCustomer}
                   />
                 )}
 
@@ -327,6 +350,13 @@ function MainApp() {
           const newCust = addCustomer(data);
           handleSelectCustomer(newCust.id);
         }}
+      />
+
+      <EditCustomerModal
+        isOpen={editCustomerState.isOpen}
+        onClose={() => setEditCustomerState({ isOpen: false, customer: null })}
+        customer={editCustomerState.customer}
+        initialTab={editCustomerState.initialTab}
       />
 
       <CompleteDrillModal

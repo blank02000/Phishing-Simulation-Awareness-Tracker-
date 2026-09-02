@@ -101,6 +101,12 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [accountNotes, setAccountNotes] = useState(customer?.notes || '');
   const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
+  const [editCustomerTab, setEditCustomerTab] = useState<'profile' | 'dates' | 'drills'>('profile');
+
+  const handleOpenEditCustomer = (tab: 'profile' | 'dates' | 'drills' = 'profile') => {
+    setEditCustomerTab(tab);
+    setIsEditCustomerOpen(true);
+  };
   const [emailModalData, setEmailModalData] = useState<{
     isOpen: boolean;
     drill?: DrillRecord | null;
@@ -173,11 +179,12 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsEditCustomerOpen(true)}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-200"
+            onClick={() => handleOpenEditCustomer('profile')}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-200 shadow-2xs"
+            title="Edit customer account details, dates, and drill schedules"
           >
             <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-            <span>Edit Customer & Products</span>
+            <span>Edit Customer & Dates</span>
           </button>
 
           <button
@@ -261,8 +268,40 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
             )}
           </div>
 
-          <div className="text-slate-500">
-            Start Date: <span className="font-medium text-slate-700">{formatDisplayDate(customer.startDate)}</span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <div>
+                <span className="text-slate-400 font-medium">Start:</span>{' '}
+                <span className="font-semibold text-slate-800">{formatDisplayDate(customer.startDate)}</span>
+              </div>
+              {customer.endDate && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <div>
+                    <span className="text-slate-400 font-medium">Renewal:</span>{' '}
+                    <span className="font-semibold text-slate-800">{formatDisplayDate(customer.endDate)}</span>
+                  </div>
+                </>
+              )}
+              {customer.licenseDetails?.maintenanceEndDate && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <div>
+                    <span className="text-slate-400 font-medium">Maint:</span>{' '}
+                    <span className="font-semibold text-slate-800">{formatDisplayDate(customer.licenseDetails.maintenanceEndDate)}</span>
+                  </div>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => handleOpenEditCustomer('dates')}
+                className="ml-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5"
+                title="Edit Contract & Maintenance Dates"
+              >
+                <Edit3 className="w-3 h-3" /> Edit Dates
+              </button>
+            </div>
           </div>
         </div>
 
@@ -930,6 +969,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
         isOpen={isEditCustomerOpen}
         onClose={() => setIsEditCustomerOpen(false)}
         customer={customer}
+        initialTab={editCustomerTab}
       />
 
       {emailModalData.isOpen && (
