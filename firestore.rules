@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connectivity test path
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User accounts collection
+    match /users/{userId} {
+      allow list: if true;
+      allow get: if isValidId(userId);
+      allow create, update: if isValidId(userId);
+      allow delete: if isValidId(userId);
+    }
+
+    // Customer accounts collection
+    match /customers/{customerId} {
+      allow list: if true;
+      allow get: if isValidId(customerId);
+      allow create, update: if isValidId(customerId);
+      allow delete: if isValidId(customerId);
+    }
+  }
+}

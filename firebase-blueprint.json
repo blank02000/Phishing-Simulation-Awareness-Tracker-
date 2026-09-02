@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account for SecOps Admin or Customer Success Manager (CSM)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique user ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Admin", "CSM"],
+          "description": "Role determining access permissions"
+        },
+        "title": {
+          "type": "string",
+          "description": "Job title"
+        },
+        "avatarColor": {
+          "type": "string",
+          "description": "Tailwind color class for avatar background"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Inactive"],
+          "description": "Account status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer organization account tracking annual drill requirements and quarterly drill records",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Customer account ID"
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Company name"
+        },
+        "customerContact": {
+          "type": "string",
+          "description": "Primary contact name"
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "Contact email"
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Contact phone number"
+        },
+        "accountOwner": {
+          "type": "string",
+          "description": "Internal account owner or sales channel"
+        },
+        "csmId": {
+          "type": "string",
+          "description": "Assigned CSM user ID"
+        },
+        "csmName": {
+          "type": "string",
+          "description": "Assigned CSM name"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "License start date (YYYY-MM-DD)"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "License end date (YYYY-MM-DD)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Onboarding", "Inactive", "Pending Review"],
+          "description": "Account status"
+        },
+        "industry": {
+          "type": "string",
+          "description": "Industry or sector"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Customer account notes"
+        },
+        "products": {
+          "type": "object",
+          "description": "Subscribed products (ProPhish, ProLMS, ProPatrol)"
+        },
+        "licenseDetails": {
+          "type": "object",
+          "description": "Extended licensing specifications"
+        },
+        "currentYear": {
+          "type": "number",
+          "description": "Current active plan year"
+        },
+        "annualPlans": {
+          "type": "object",
+          "description": "Map of plan years to drill schedules and LMS deliverables"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["id", "companyName", "customerContact", "accountOwner", "startDate", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles for Admin and CSM team members"
+    },
+    "/customers/{customerId}": {
+      "schema": {
+        "$ref": "#/entities/Customer"
+      },
+      "description": "Stores customer accounts, drill plans, and completion logs"
+    }
+  }
+}
