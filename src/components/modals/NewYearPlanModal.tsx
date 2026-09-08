@@ -55,8 +55,14 @@ export const NewYearPlanModal: React.FC<NewYearPlanModalProps> = ({
 
   const previewDrills = useMemo(() => {
     if (!startDate) return [];
-    return generateAnnualTimeline(startDate, annualRequirement, intervalMonths, defaultDrillType);
-  }, [startDate, annualRequirement, intervalMonths, defaultDrillType]);
+    return generateAnnualTimeline(
+      startDate,
+      annualRequirement,
+      intervalMonths,
+      defaultDrillType,
+      customer?.licenseDetails?.managedDrillFrequency
+    );
+  }, [startDate, annualRequirement, intervalMonths, defaultDrillType, customer]);
 
   if (!isOpen || !customer) return null;
 

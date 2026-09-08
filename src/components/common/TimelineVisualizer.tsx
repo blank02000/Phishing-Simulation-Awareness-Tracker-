@@ -2,7 +2,7 @@ import React from 'react';
 import { DrillRecord } from '../../types';
 import {
   formatDisplayDate,
-  formatMonthShort,
+  formatSimulationMonthWindow,
   computeDrillStatus,
 } from '../../utils/drillCalculator';
 import { CheckCircle2, Clock, Calendar, AlertTriangle, PlayCircle, ChevronRight } from 'lucide-react';
@@ -29,7 +29,7 @@ export const TimelineVisualizer: React.FC<TimelineVisualizerProps> = ({
       {/* Legend Bar */}
       <div className="flex items-center justify-between text-xs font-medium text-slate-500 pb-2 border-b border-slate-100">
         <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          Drill Milestones
+          Simulation Drill Milestones
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-500">
           <div className="flex items-center gap-1.5">
@@ -55,7 +55,7 @@ export const TimelineVisualizer: React.FC<TimelineVisualizerProps> = ({
         </div>
       </div>
 
-      {/* Grid of Milestone Cards (Professional Polish Architecture) */}
+      {/* Grid of Milestone Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
         {sortedDrills.map((drill, idx) => {
           const status = computeDrillStatus(drill, referenceDate);
@@ -66,7 +66,7 @@ export const TimelineVisualizer: React.FC<TimelineVisualizerProps> = ({
           let cardStyle =
             'bg-slate-50 border-slate-200 border-l-4 border-l-slate-300 opacity-80 hover:opacity-100';
           let tagStyle = 'bg-slate-200 text-slate-700';
-          let quarterLabel = `Q${idx + 1} • Drill 0${drill.drillNumber}`;
+          let quarterLabel = `Q${idx + 1} • DRILL 0${drill.drillNumber}`;
           let statusText = 'PLANNED';
           let statusColor = 'text-slate-500';
 
@@ -102,6 +102,15 @@ export const TimelineVisualizer: React.FC<TimelineVisualizerProps> = ({
             statusColor = 'text-blue-700';
           }
 
+          const monthWindowBadge = formatSimulationMonthWindow(drill.plannedDate, 'badge');
+          const monthWindowText = formatSimulationMonthWindow(drill.plannedDate, 'detailed');
+          const monthWindowQuarter = formatSimulationMonthWindow(drill.plannedDate, 'months');
+
+          // Dynamically compose title to show proper simulation month window
+          const displayTitle = drill.title?.includes('(')
+            ? drill.title.replace(/\([^)]*\)/, `(${monthWindowQuarter})`)
+            : `Drill ${drill.drillNumber} — Q${idx + 1} (${monthWindowQuarter})`;
+
           return (
             <div
               key={drill.id}
@@ -112,24 +121,28 @@ export const TimelineVisualizer: React.FC<TimelineVisualizerProps> = ({
               }`}
             >
               <div>
-                {/* Header row */}
+                {/* Header row with Quarter Label and Month Window Badge */}
                 <div className="flex justify-between items-start mb-2.5">
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
                     {quarterLabel}
                   </span>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${tagStyle}`}
+                    title={`Phishing Simulation Window: ${monthWindowText} (Launch: ${formatDisplayDate(drill.plannedDate)})`}
                   >
-                    {formatMonthShort(drill.plannedDate)} {drill.plannedDate.substring(8, 10)}
+                    {monthWindowBadge}
                   </span>
                 </div>
 
                 {/* Drill Title & Subtitle */}
                 <h4 className="font-bold text-slate-800 text-sm leading-snug line-clamp-1">
-                  {drill.title}
+                  {displayTitle}
                 </h4>
                 <p className="text-slate-500 text-xs mt-1 line-clamp-1">
-                  {drill.campaignName || drill.drillType || 'Cyber Awareness Simulation'}
+                  {drill.campaignName || drill.drillType || 'Phishing Simulation Campaign'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 font-medium line-clamp-1">
+                  Window: {monthWindowText}
                 </p>
               </div>
 

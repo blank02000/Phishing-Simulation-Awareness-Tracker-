@@ -132,7 +132,7 @@ export function getMonthlyProgress(
 
   // Contextual CSM Recommendations
   const csmRecommendations: string[] = [];
-  if (drillsThisMonth.some((d) => d.status === 'Overdue')) {
+  if (drillsThisMonth.some((d) => computeDrillStatus(d, referenceDate, dueSoonDays) === 'Overdue')) {
     csmRecommendations.push(
       `Escalate overdue drill with ${customer.customerContact} to ensure annual compliance quota is not compromised.`
     );

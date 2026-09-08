@@ -5,7 +5,9 @@ import {
   computeDrillStatus,
   formatDisplayDate,
   formatMonthShort,
+  formatSimulationMonthWindow,
   parseDate,
+  getSanctionedDrillPeriod,
 } from '../utils/drillCalculator';
 import { DrillStatusBadge, ReviewMeetingStatusBadge } from './common/StatusBadges';
 import {
@@ -257,8 +259,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             )}
                           </div>
 
-                          <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-2">
-                            <span>{formatDisplayDate(ev.date)}</span>
+                          <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                            {isDrill ? (
+                              (() => {
+                                const period = getSanctionedDrillPeriod(ev.drill, referenceDate);
+                                return (
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-semibold text-[11px] border ${
+                                      period.isCurrentPeriod
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                        : 'bg-blue-50 text-blue-700 border-blue-100'
+                                    }`}
+                                  >
+                                    Sanctioned Period: {period.label} ({period.quarterLabel})
+                                    {period.isCurrentPeriod && ` • ${period.daysRemainingInPeriod}d left`}
+                                  </span>
+                                );
+                              })()
+                            ) : (
+                              <span>Meeting Date: {formatDisplayDate(ev.date)}</span>
+                            )}
                             {ev.subtitle && <span>• {ev.subtitle}</span>}
                             <span>• Owner: {ev.customer.accountOwner}</span>
                           </div>

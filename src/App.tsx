@@ -16,7 +16,6 @@ import { RemindersView } from './components/RemindersView';
 import { AnnualReportView } from './components/AnnualReportView';
 import { ReviewsView } from './components/ReviewsView';
 import { CsmManagementView } from './components/CsmManagementView';
-import { SettingsView } from './components/SettingsView';
 
 import { CreateCustomerModal } from './components/modals/CreateCustomerModal';
 import { EditCustomerModal } from './components/modals/EditCustomerModal';
@@ -334,8 +333,6 @@ function MainApp() {
                     onSelectCustomer={handleSelectCustomer}
                   />
                 )}
-
-                {activeTab === 'settings' && <SettingsView />}
               </>
             )}
           </div>

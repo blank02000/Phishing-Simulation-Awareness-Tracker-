@@ -103,11 +103,17 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
     }
   };
 
-  // Preview generated timeline dynamically
+  // Preview generated timeline dynamically with sanctioned periods
   const previewDrills = useMemo(() => {
     if (!startDate) return [];
-    return generateAnnualTimeline(startDate, annualRequirement, intervalMonths, defaultDrillType);
-  }, [startDate, annualRequirement, intervalMonths, defaultDrillType]);
+    return generateAnnualTimeline(
+      startDate,
+      annualRequirement,
+      intervalMonths,
+      defaultDrillType,
+      managedFrequency
+    );
+  }, [startDate, annualRequirement, intervalMonths, defaultDrillType, managedFrequency]);
 
   if (!isOpen) return null;
 
@@ -457,15 +463,22 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
             {/* Generated Timeline Preview */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
               <div className="text-[11px] font-bold text-slate-700 mb-2 flex items-center justify-between">
-                <span>Generated Drill Timeline Preview ({previewDrills.length} Drills):</span>
-                <span className="text-slate-500 font-normal">Auto-spaced across license year</span>
+                <span>Sanctioned Drill Periods ({previewDrills.length} Drills):</span>
+                <span className="text-slate-500 font-normal">Sanctioned execution window per frequency</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 {previewDrills.map((drill, idx) => (
-                  <div key={drill.id} className="bg-white p-2 rounded-lg border border-slate-200 text-[11px]">
-                    <div className="font-bold text-slate-900">Drill #{idx + 1}</div>
-                    <div className="text-slate-500 font-medium">{drill.plannedDate}</div>
-                    <div className="text-blue-600 truncate">{drill.drillType}</div>
+                  <div key={drill.id} className="bg-white p-2.5 rounded-lg border border-slate-200 text-[11px] space-y-1 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900">Drill #{idx + 1}</span>
+                      <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                        Q{drill.quarter || idx + 1}
+                      </span>
+                    </div>
+                    <div className="text-emerald-700 font-semibold text-[10px]">
+                      {drill.drillPeriodLabel || drill.plannedDate}
+                    </div>
+                    <div className="text-slate-500 text-[10px] truncate">{drill.drillType}</div>
                   </div>
                 ))}
               </div>

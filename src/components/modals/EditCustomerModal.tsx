@@ -26,7 +26,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useCustomerContext } from '../../context/CustomerContext';
-import { formatDisplayDate } from '../../utils/drillCalculator';
+import { formatDisplayDate, formatSimulationMonthWindow } from '../../utils/drillCalculator';
 
 interface EditCustomerModalProps {
   isOpen: boolean;
@@ -715,7 +715,7 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                         <div>
                           <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                            Planned Date <span className="text-rose-500">*</span>
+                            Planned Launch Date <span className="text-rose-500">*</span>
                           </label>
                           <input
                             type="date"
@@ -724,6 +724,11 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
                             onChange={(e) => handleDrillChange(idx, 'plannedDate', e.target.value)}
                             className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                           />
+                          {drill.plannedDate && (
+                            <div className="mt-1 text-[10px] font-semibold text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded border border-blue-100/60">
+                              Window: {formatSimulationMonthWindow(drill.plannedDate, 'detailed')}
+                            </div>
+                          )}
                         </div>
 
                         <div>

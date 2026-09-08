@@ -8,7 +8,6 @@ import {
   Calendar,
   Bell,
   FileBarChart2,
-  Settings,
   UserCheck,
   Sparkles,
   MessageSquare,
@@ -127,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom Section: User Avatar, Settings & Logout */}
+      {/* Bottom Section: User Avatar & Logout */}
       <div className="w-full px-2.5 space-y-2 flex flex-col items-center">
         {/* User Role Indicator Avatar */}
         <button
@@ -139,21 +138,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title={`Logged in as ${currentUser.name} (${currentUser.role})`}
         >
           {currentUser.name.charAt(0)}
-        </button>
-
-        <button
-          id="sidebar-tab-settings"
-          type="button"
-          onClick={() => setActiveTab('settings')}
-          className={`w-full py-2 rounded-xl flex flex-col items-center justify-center text-[11px] font-medium transition-all ${
-            activeTab === 'settings'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/80'
-          }`}
-          title="System Settings"
-        >
-          <Settings className="w-5 h-5" />
-          <span className="text-[10px] mt-1 tracking-tight leading-none">Settings</span>
         </button>
 
         <button

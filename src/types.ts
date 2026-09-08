@@ -11,6 +11,17 @@ export interface UserAccount {
   createdAt: string;
 }
 
+export interface AuthSession {
+  token: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  createdAt: number;
+  expiresAt: number;
+  sessionDurationHours: number;
+}
+
 export type DrillStatus =
   | 'Upcoming'
   | 'Due Soon'
@@ -58,6 +69,12 @@ export interface DrillRecord {
   drillType: DrillType;
   status: DrillStatus;
   campaignName?: string;
+  drillPeriodLabel?: string; // e.g. "July – September 2026"
+  drillPeriodStart?: string; // YYYY-MM-DD
+  drillPeriodEnd?: string; // YYYY-MM-DD
+  sanctionedMonths?: string[]; // e.g. ["July", "August", "September"]
+  quarter?: number; // 1, 2, 3, 4
+  frequency?: string; // 'Quarterly' | 'Monthly' | 'Bi-Monthly' | 'Half-Yearly' | 'Yearly'
   participantsCount?: number;
   clickRate?: number; // 0 - 100%
   submissionRate?: number; // 0 - 100%
@@ -189,10 +206,15 @@ export interface AppReminder {
   companyName: string;
   drillId?: string;
   drillNumber?: number;
-  type: 'drill_overdue' | 'drill_due_soon' | 'meeting_scheduled' | 'annual_at_risk';
+  type: 'drill_overdue' | 'drill_due_soon' | 'drill_active_period' | 'meeting_scheduled' | 'annual_at_risk';
   severity: 'high' | 'medium' | 'low';
   title: string;
   description: string;
   dueDate?: string;
   actionLabel?: string;
+  sanctionedPeriodLabel?: string;
+  sanctionedMonths?: string[];
+  quarter?: number;
+  daysRemainingInPeriod?: number;
+  isCurrentActivePeriod?: boolean;
 }

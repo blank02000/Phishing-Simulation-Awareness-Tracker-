@@ -1,41 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useCustomerContext } from '../context/CustomerContext';
 import {
   Shield,
   Mail,
   ArrowRight,
-  UserCheck,
   Lock,
-  Sparkles,
+  KeyRound,
   AlertCircle,
   CheckCircle2,
   Users,
-  Building2,
+  Clock,
+  Sparkles,
+  ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
-  const { users, loginWithEmail, pendingLoginEmail, setPendingLoginEmail } = useCustomerContext();
+  const {
+    users,
+    loginWithEmail,
+    sendLoginOtp,
+    verifyLoginOtp,
+    pendingLoginEmail,
+    setPendingLoginEmail,
+    lastSentEmail,
+  } = useCustomerContext();
+
   const [emailInput, setEmailInput] = useState(() => pendingLoginEmail || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // OTP space toggle: allows testing the 6-digit OTP workflow or direct email login
+  const [useOtpMode, setUseOtpMode] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [activeOtpCode, setActiveOtpCode] = useState<string | null>(null);
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   // Sync if pendingLoginEmail is updated externally
-  React.useEffect(() => {
+  useEffect(() => {
     if (pendingLoginEmail) {
       setEmailInput(pendingLoginEmail);
     }
   }, [pendingLoginEmail]);
 
-  const adminUser = users.find((u) => u.role === 'Admin');
+  const adminUsers = users.filter((u) => u.role === 'Admin');
   const csmUsers = users.filter((u) => u.role === 'CSM' && u.status === 'Active');
 
-  const handleLogin = (e?: React.FormEvent, targetEmail?: string) => {
+  // Direct small email-based login
+  const handleDirectLogin = (e?: React.FormEvent, targetEmail?: string) => {
     if (e) e.preventDefault();
     const emailToUse = targetEmail || emailInput;
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     if (!emailToUse.trim()) {
-      setErrorMsg('Please enter your email ID to log in.');
+      setErrorMsg('Please enter your work email ID to log in.');
       return;
     }
 
@@ -46,7 +67,105 @@ export const LoginView: React.FC = () => {
       if (!res.success) {
         setErrorMsg(res.error || 'Authentication failed.');
       }
-    }, 200);
+    }, 250);
+  };
+
+  // Dispatch 6-digit OTP to the entered email ID
+  const handleRequestOtp = (e?: React.FormEvent, targetEmail?: string) => {
+    if (e) e.preventDefault();
+    const emailToUse = targetEmail || emailInput;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!emailToUse.trim()) {
+      setErrorMsg('Please enter your work email ID to receive a verification OTP.');
+      return;
+    }
+
+    setIsLoading(true);
+    setTimeout(() => {
+      const res = sendLoginOtp(emailToUse);
+      setIsLoading(false);
+      if (!res.success) {
+        setErrorMsg(res.error || 'Could not send verification code.');
+      } else {
+        setOtpSent(true);
+        setActiveOtpCode(res.otp || null);
+        setOtpDigits(['', '', '', '', '', '']);
+        setSuccessMsg(`A 6-digit verification code was dispatched to ${emailToUse}`);
+        // Focus first OTP box
+        setTimeout(() => {
+          otpInputRefs.current[0]?.focus();
+        }, 100);
+      }
+    }, 300);
+  };
+
+  // Handle OTP digit changes
+  const handleOtpChange = (index: number, val: string) => {
+    const clean = val.replace(/\D/g, '');
+    if (!clean) {
+      const updated = [...otpDigits];
+      updated[index] = '';
+      setOtpDigits(updated);
+      return;
+    }
+
+    // If user pasted a full 6-digit code
+    if (clean.length > 1) {
+      const pastedDigits = clean.slice(0, 6).split('');
+      const updated = [...otpDigits];
+      pastedDigits.forEach((d, i) => {
+        if (i < 6) updated[i] = d;
+      });
+      setOtpDigits(updated);
+      const nextIndex = Math.min(pastedDigits.length, 5);
+      otpInputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    const updated = [...otpDigits];
+    updated[index] = clean.slice(-1);
+    setOtpDigits(updated);
+
+    if (index < 5 && clean) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Verify entered 6-digit OTP
+  const handleVerifyOtp = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErrorMsg(null);
+
+    const fullCode = otpDigits.join('');
+    if (fullCode.length !== 6) {
+      setErrorMsg('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setIsLoading(true);
+    setTimeout(() => {
+      const res = verifyLoginOtp(emailInput, fullCode);
+      setIsLoading(false);
+      if (!res.success) {
+        setErrorMsg(res.error || 'Invalid OTP code.');
+      }
+    }, 250);
+  };
+
+  const autoFillOtp = () => {
+    if (!activeOtpCode) return;
+    const digits = activeOtpCode.split('');
+    setOtpDigits(digits);
+    setErrorMsg(null);
+    otpInputRefs.current[5]?.focus();
   };
 
   return (
@@ -67,25 +186,61 @@ export const LoginView: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1 font-medium">
             Progist Phishing Simulation & LMS Compliance Portal
           </p>
+
+          {/* Session Token Guarantee Banner */}
+          <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900/90 border border-slate-700/80 rounded-full text-[11px] text-slate-300 font-medium">
+            <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span>Active session token created for <strong>7 hours</strong> per login</span>
+          </div>
         </div>
 
         {/* Form Body */}
         <div className="p-6 sm:p-7 space-y-5">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">
-              {pendingLoginEmail ? 'Switch Account / Sign In' : 'Sign in to your account'}
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Enter your authorized Progist email ID (Admin or assigned CSM).
-            </p>
+          {/* View Title & Switcher */}
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                {otpSent
+                  ? 'Verify 6-Digit OTP'
+                  : useOtpMode
+                  ? 'Sign in with OTP Verification'
+                  : 'Sign in to SecOps Portal'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {otpSent
+                  ? `Enter the 6-digit code sent to ${emailInput}`
+                  : 'Enter your authorized email to access customer simulation data.'}
+              </p>
+            </div>
+
+            {/* Mode toggle button */}
+            {!otpSent && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUseOtpMode(!useOtpMode);
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                  useOtpMode
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Toggle between direct email login and 6-digit OTP verification"
+              >
+                {useOtpMode ? '✓ OTP Mode' : '+ Enable OTP'}
+              </button>
+            )}
           </div>
 
-          {pendingLoginEmail && (
+          {/* Switching email banner */}
+          {pendingLoginEmail && !otpSent && (
             <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl text-xs flex items-center justify-between gap-2 animate-in fade-in">
               <div className="flex items-center gap-2 min-w-0">
                 <Users className="w-4 h-4 text-blue-600 shrink-0" />
                 <span className="truncate">
-                  Switching to: <strong>{pendingLoginEmail}</strong>
+                  Target Account: <strong>{pendingLoginEmail}</strong>
                 </span>
               </div>
               <button
@@ -101,6 +256,7 @@ export const LoginView: React.FC = () => {
             </div>
           )}
 
+          {/* Error Message */}
           {errorMsg && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -108,99 +264,254 @@ export const LoginView: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
-            <div>
-              <label htmlFor="login-email-input" className="block text-xs font-bold text-slate-700 mb-1.5">
-                Work Email ID
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  id="login-email-input"
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => {
-                    setEmailInput(e.target.value);
-                    if (errorMsg) setErrorMsg(null);
-                  }}
-                  placeholder="name@progist.net"
-                  autoFocus
-                  required
-                  className="w-full pl-9.5 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
-                />
+          {/* Success / OTP Dispatched Alert */}
+          {successMsg && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs space-y-2 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="font-medium leading-relaxed">{successMsg}</div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              id="btn-login-submit"
-              disabled={isLoading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
-            >
-              {isLoading ? (
-                <span>Authenticating...</span>
-              ) : (
-                <>
-                  <span>Sign In with Email</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
+              {/* Simulated Email Passcode Helper */}
+              {activeOtpCode && otpSent && (
+                <div className="mt-2 p-2.5 bg-white border border-emerald-300 rounded-lg flex items-center justify-between shadow-2xs">
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      Dispatched Security Code
+                    </span>
+                    <span className="font-mono text-base font-extrabold text-slate-900 tracking-widest">
+                      {activeOtpCode}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={autoFillOtp}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    Auto-Fill Code
+                  </button>
+                </div>
               )}
-            </button>
-          </form>
+            </div>
+          )}
 
-          {/* Quick Authorized Accounts Selector for testing/convenience */}
+          {/* MODE 1: OTP DIGIT ENTRY SCREEN */}
+          {otpSent ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2 text-center">
+                  Enter 6-Digit Verification Code
+                </label>
+                <div className="flex items-center justify-center gap-2 sm:gap-2.5">
+                  {otpDigits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        otpInputRefs.current[idx] = el;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                      className="w-11 h-13 text-center text-xl font-mono font-bold bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 focus:outline-hidden focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+                    />
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 text-center mt-2">
+                  Passcode valid for 10 minutes • Issues 7-hour active token
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                id="btn-verify-otp-submit"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+              >
+                {isLoading ? (
+                  <span>Validating OTP & Creating Token...</span>
+                ) : (
+                  <>
+                    <KeyRound className="w-4 h-4" />
+                    <span>Verify Code & Start 7-Hour Session</span>
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors cursor-pointer"
+                >
+                  ← Change Email
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleRequestOtp(undefined, emailInput)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Resend OTP</span>
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* MODE 2: EMAIL INPUT (Direct Login OR Request OTP) */
+            <form
+              onSubmit={(e) => (useOtpMode ? handleRequestOtp(e) : handleDirectLogin(e))}
+              className="space-y-4"
+            >
+              <div>
+                <label
+                  htmlFor="login-email-input"
+                  className="block text-xs font-bold text-slate-700 mb-1.5"
+                >
+                  Work Email ID
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="login-email-input"
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => {
+                      setEmailInput(e.target.value);
+                      if (errorMsg) setErrorMsg(null);
+                    }}
+                    placeholder="name@progist.net or shiyadshubh2000@gmail.com"
+                    autoFocus
+                    required
+                    className="w-full pl-9.5 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                  />
+                </div>
+              </div>
+
+              {useOtpMode ? (
+                <button
+                  type="submit"
+                  id="btn-request-otp-submit"
+                  disabled={isLoading}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                >
+                  {isLoading ? (
+                    <span>Sending 6-Digit OTP...</span>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4" />
+                      <span>Send 6-Digit OTP to Email</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  id="btn-login-submit"
+                  disabled={isLoading}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                >
+                  {isLoading ? (
+                    <span>Authenticating & Creating 7h Token...</span>
+                  ) : (
+                    <>
+                      <span>Sign In with Email</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Toggle footnote */}
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>
+                  {useOtpMode
+                    ? 'Generates a 6-digit one-time passcode'
+                    : 'Direct login creates a 7-hour session'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseOtpMode(!useOtpMode);
+                    setErrorMsg(null);
+                  }}
+                  className="text-blue-600 hover:underline font-bold cursor-pointer"
+                >
+                  {useOtpMode ? 'Switch to direct login' : 'Try OTP verification'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Quick Authorized Accounts Selector for testing & convenience */}
           <div className="pt-4 border-t border-slate-100 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Authorized Team Accounts
               </span>
-              <span className="text-[10px] text-slate-400 font-medium">Quick Sign In</span>
+              <span className="text-[10px] text-slate-400 font-medium">1-Click Sign In</span>
             </div>
 
             <div className="space-y-2">
-              {/* Admin Button */}
-              {adminUser && (
+              {/* Admin Accounts */}
+              {adminUsers.map((admin) => (
                 <button
+                  key={admin.id}
                   type="button"
-                  id="btn-quick-login-admin"
+                  id={`btn-quick-login-${admin.id}`}
                   onClick={() => {
-                    setEmailInput(adminUser.email);
-                    handleLogin(undefined, adminUser.email);
+                    setEmailInput(admin.email);
+                    if (useOtpMode) {
+                      handleRequestOtp(undefined, admin.email);
+                    } else {
+                      handleDirectLogin(undefined, admin.email);
+                    }
                   }}
-                  className="w-full p-2.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100/70 text-left flex items-center justify-between transition-all group"
+                  className="w-full p-2.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100/70 text-left flex items-center justify-between transition-all group cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
-                      {adminUser.name.charAt(0)}
+                      {admin.name.charAt(0)}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 group-hover:text-purple-900 flex items-center gap-1.5">
-                        <span>{adminUser.name}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-purple-200 text-purple-800 text-[9px] font-extrabold">
+                        <span className="truncate">{admin.name}</span>
+                        <span className="px-1.5 py-0.2 rounded bg-purple-200 text-purple-800 text-[9px] font-extrabold shrink-0">
                           Admin
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500">{adminUser.email}</div>
+                      <div className="text-[11px] text-slate-500 truncate">{admin.email}</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ArrowRight className="w-4 h-4 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </button>
-              )}
+              ))}
 
-              {/* CSM Users */}
+              {/* CSM Accounts */}
               {csmUsers.map((csm) => (
                 <button
                   key={csm.id}
                   type="button"
+                  id={`btn-quick-login-${csm.id}`}
                   onClick={() => {
                     setEmailInput(csm.email);
-                    handleLogin(undefined, csm.email);
+                    if (useOtpMode) {
+                      handleRequestOtp(undefined, csm.email);
+                    } else {
+                      handleDirectLogin(undefined, csm.email);
+                    }
                   }}
-                  className="w-full p-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-100/70 text-left flex items-center justify-between transition-all group"
+                  className="w-full p-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-100/70 text-left flex items-center justify-between transition-all group cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div
                       className={`w-8 h-8 rounded-lg ${
                         csm.avatarColor || 'bg-emerald-600'
@@ -208,24 +519,24 @@ export const LoginView: React.FC = () => {
                     >
                       {csm.name.charAt(0)}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-900 flex items-center gap-1.5">
-                        <span>{csm.name}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800 text-[9px] font-extrabold">
+                        <span className="truncate">{csm.name}</span>
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800 text-[9px] font-extrabold shrink-0">
                           CSM
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500">{csm.email}</div>
+                      <div className="text-[11px] text-slate-500 truncate">{csm.email}</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ArrowRight className="w-4 h-4 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </button>
               ))}
 
               {csmUsers.length === 0 && (
                 <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
                   <p className="text-[11px] text-slate-500">
-                    No CSM accounts added yet. Log in as Admin to invite CSMs.
+                    No CSM accounts added yet. Log in as Admin to invite CSM team members.
                   </p>
                 </div>
               )}
@@ -234,7 +545,7 @@ export const LoginView: React.FC = () => {
 
           <div className="pt-2 text-center">
             <p className="text-[11px] text-slate-400">
-              Secured with Firebase Firestore & Role-Based Access Control
+              Secured with Token-Based Session Management & Role-Based Access Control
             </p>
           </div>
         </div>

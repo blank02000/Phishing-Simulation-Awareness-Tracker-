@@ -11,6 +11,7 @@ import {
   LmsDeliverable,
   DeliverableFrequency,
   LicenseDetails,
+  AuthSession,
 } from '../types';
 import { INITIAL_USERS, INITIAL_CUSTOMERS } from '../data/seedData';
 import {
@@ -47,9 +48,13 @@ interface CustomerContextType {
   users: UserAccount[];
   currentUser: UserAccount;
   isAuthenticated: boolean;
+  authSession: AuthSession | null;
   pendingLoginEmail: string | null;
   setPendingLoginEmail: (email: string | null) => void;
   loginWithEmail: (email: string) => { success: boolean; user?: UserAccount; error?: string };
+  sendLoginOtp: (email: string) => { success: boolean; otp?: string; expiresAt?: number; error?: string };
+  verifyLoginOtp: (email: string, otp: string) => { success: boolean; user?: UserAccount; error?: string };
+  getActiveSessionRemainingTime: () => { hours: number; minutes: number; isExpired: boolean; formatted: string } | null;
   logout: (prefillEmail?: string) => void;
   setCurrentUserId: (id: string) => void;
   addCsmUser: (data: { name: string; email: string; title: string }) => Promise<UserAccount>;
@@ -150,12 +155,20 @@ interface CustomerContextType {
 const STORAGE_KEY = 'cyberdrill_customers_v4';
 const USERS_STORAGE_KEY = 'cyberdrill_users_v4';
 const CURRENT_USER_KEY = 'cyberdrill_current_user_v4';
-const AUTH_STATE_KEY = 'cyberdrill_auth_state_v4';
+const AUTH_SESSION_KEY = 'cyberdrill_auth_session_v5';
 const DATE_STORAGE_KEY = 'cyberdrill_ref_date_v4';
 
-// Clear legacy cached demo customers & users from older versions (including Sarah Jenkins)
+// 7 Hours Session Duration (keeps account active for six to seven hours per day)
+export const SESSION_DURATION_HOURS = 7;
+export const SESSION_DURATION_MS = SESSION_DURATION_HOURS * 60 * 60 * 1000;
+
+// Clear legacy cached demo customers & old unverified auth states so login is strictly required
 try {
   if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.removeItem('cyberdrill_auth_state_v4');
+    localStorage.removeItem('cyberdrill_auth_state_v3');
+    localStorage.removeItem('cyberdrill_auth_state_v2');
+    localStorage.removeItem('cyberdrill_auth_state');
     localStorage.removeItem('cyberdrill_customers_v3');
     localStorage.removeItem('cyberdrill_customers_v2');
     localStorage.removeItem('cyberdrill_customers_v1');
@@ -187,13 +200,13 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
               u.id !== 'user-admin-1' &&
               u.email?.toLowerCase() !== 'sarah.jenkins@cyberdrill.io'
           );
-          if (cleaned.length > 0) {
-            // Ensure Vinisha Mendonca is present
-            if (!cleaned.some((u) => u.email?.toLowerCase() === 'vinisha.mendonca@progist.net')) {
-              cleaned.unshift(INITIAL_USERS[0]);
+          // Ensure all initial users (Vinisha Mendonca and Shubh) are present
+          INITIAL_USERS.forEach((initUser) => {
+            if (!cleaned.some((u) => u.email?.toLowerCase() === initUser.email.toLowerCase())) {
+              cleaned.push(initUser);
             }
-            return cleaned;
-          }
+          });
+          return cleaned;
         }
       }
     } catch (e) {
@@ -202,29 +215,60 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     return INITIAL_USERS;
   });
 
-  const [currentUserId, setCurrentUserIdState] = useState<string>(() => {
+  // Active Token Auth Session (valid for 7 hours)
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => {
     try {
-      const saved = localStorage.getItem(CURRENT_USER_KEY);
-      if (saved && saved !== 'user-admin-1') return saved;
+      if (typeof window === 'undefined') return null;
+      const raw = localStorage.getItem(AUTH_SESSION_KEY);
+      if (!raw) return null;
+      const parsed: AuthSession = JSON.parse(raw);
+      if (parsed && parsed.token && parsed.expiresAt && parsed.expiresAt > Date.now()) {
+        return parsed;
+      }
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return null;
     } catch {
-      // ignore
+      return null;
     }
-    return INITIAL_USERS[0].id; // Default to Admin Vinisha Mendonca
   });
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+  const [currentUserId, setCurrentUserIdState] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem(AUTH_STATE_KEY);
-      if (saved !== null) {
-        return saved === 'true';
+      const raw = localStorage.getItem(AUTH_SESSION_KEY);
+      if (raw) {
+        const parsed: AuthSession = JSON.parse(raw);
+        if (parsed && parsed.userId && parsed.expiresAt > Date.now()) {
+          return parsed.userId;
+        }
       }
     } catch {
       // ignore
     }
-    return true; // Default logged in for existing session
+    return INITIAL_USERS[0].id;
+  });
+
+  // CRITICAL: Strictly false unless a valid, unexpired token exists in localStorage!
+  // Direct visits to the URL without logging in MUST NOT open the tool!
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      const raw = localStorage.getItem(AUTH_SESSION_KEY);
+      if (!raw) return false;
+      const parsed: AuthSession = JSON.parse(raw);
+      return Boolean(parsed && parsed.token && parsed.expiresAt && parsed.expiresAt > Date.now());
+    } catch {
+      return false;
+    }
   });
 
   const [pendingLoginEmail, setPendingLoginEmail] = useState<string | null>(null);
+
+  // OTP Verification State (6-Digit OTP)
+  const [pendingOtp, setPendingOtp] = useState<{
+    email: string;
+    code: string;
+    expiresAt: number;
+  } | null>(null);
 
   // Master customers list (all customers in the system)
   const [allCustomers, setAllCustomers] = useState<Customer[]>(() => {
@@ -349,12 +393,29 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     try {
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-      localStorage.setItem(CURRENT_USER_KEY, currentUserId);
-      localStorage.setItem(AUTH_STATE_KEY, String(isAuthenticated));
+      if (currentUserId) {
+        localStorage.setItem(CURRENT_USER_KEY, currentUserId);
+      }
     } catch (e) {
       console.warn('Could not save users to local storage', e);
     }
-  }, [users, currentUserId, isAuthenticated]);
+  }, [users, currentUserId]);
+
+  // Periodic active session token expiry check (auto log out when 7 hours elapse)
+  useEffect(() => {
+    if (!isAuthenticated || !authSession) return;
+
+    const checkTokenExpiry = () => {
+      if (Date.now() >= authSession.expiresAt) {
+        console.warn('SecOps session token expired after 7 hours. Auto-logging out.');
+        logout(authSession.email);
+      }
+    };
+
+    checkTokenExpiry();
+    const interval = setInterval(checkTokenExpiry, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, [isAuthenticated, authSession]);
 
   // Auto-persist customers to localStorage as offline cache
   useEffect(() => {
@@ -365,7 +426,23 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, [allCustomers]);
 
-  // Login via Email ID
+  // Helper: Create secure 7-hour session token
+  const createSessionForUser = (user: UserAccount): AuthSession => {
+    const now = Date.now();
+    const token = `secops_tok_${Date.now()}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 6)}`;
+    return {
+      token,
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      createdAt: now,
+      expiresAt: now + SESSION_DURATION_MS,
+      sessionDurationHours: SESSION_DURATION_HOURS,
+    };
+  };
+
+  // Login via Work Email ID (Direct authentication with 7-hour session token)
   const loginWithEmail = (
     email: string
   ): { success: boolean; user?: UserAccount; error?: string } => {
@@ -381,51 +458,173 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!matchedUser) {
       return {
         success: false,
-        error: `No account found with email "${email}". Please verify your email or contact the Admin (vinisha.mendonca@progist.net).`,
+        error: `No authorized account found with email "${email}". Please verify your email or select an authorized SecOps account below.`,
       };
     }
 
     if (matchedUser.status === 'Inactive') {
       return {
         success: false,
-        error: `The account for "${email}" is currently inactive. Please contact the administrator.`,
+        error: `The account for "${email}" is currently inactive. Please contact your SecOps administrator.`,
       };
     }
 
+    // Generate active session token valid for 7 hours
+    const session = createSessionForUser(matchedUser);
+    setAuthSession(session);
     setCurrentUserIdState(matchedUser.id);
     setIsAuthenticated(true);
     setPendingLoginEmail(null);
+    setPendingOtp(null);
+
     try {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
       localStorage.setItem(CURRENT_USER_KEY, matchedUser.id);
-      localStorage.setItem(AUTH_STATE_KEY, 'true');
-    } catch {}
+    } catch (e) {
+      console.warn('Could not persist auth session to storage', e);
+    }
 
     return { success: true, user: matchedUser };
   };
 
+  // Dispatch a 6-digit OTP code to the requested email ID
+  const sendLoginOtp = (
+    email: string
+  ): { success: boolean; otp?: string; expiresAt?: number; error?: string } => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+
+    const matchedUser = users.find(
+      (u) => u.email.trim().toLowerCase() === normalizedEmail
+    );
+
+    if (!matchedUser) {
+      return {
+        success: false,
+        error: `No authorized account found with email "${email}". Please verify your email or select an authorized SecOps account.`,
+      };
+    }
+
+    if (matchedUser.status === 'Inactive') {
+      return {
+        success: false,
+        error: `The account for "${email}" is currently inactive.`,
+      };
+    }
+
+    // Generate 6-digit OTP
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes OTP validity
+
+    setPendingOtp({ email: normalizedEmail, code, expiresAt });
+
+    const timestamp = new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+
+    // Record dispatched email so it can be previewed/toasted in the UI
+    setLastSentEmail({
+      to: normalizedEmail,
+      subject: `CyberDrill SecOps: Your 6-Digit One-Time Passcode is ${code}`,
+      body: `Hello ${matchedUser.name},\n\nYour 6-digit one-time passcode (OTP) is:\n\n${code}\n\nThis verification code expires in 10 minutes. When verified, a secure access token will be issued keeping your account active for 7 hours.\n\nProgist CyberDrill SecOps Security Team`,
+      timestamp,
+    });
+
+    return { success: true, otp: code, expiresAt };
+  };
+
+  // Verify 6-digit OTP and issue the 7-hour session token
+  const verifyLoginOtp = (
+    email: string,
+    inputOtp: string
+  ): { success: boolean; user?: UserAccount; error?: string } => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const cleanOtp = inputOtp.trim().replace(/\D/g, '');
+
+    if (!pendingOtp || pendingOtp.email !== normalizedEmail) {
+      return {
+        success: false,
+        error: 'No active OTP request found for this email. Please request a new code.',
+      };
+    }
+
+    if (Date.now() > pendingOtp.expiresAt) {
+      setPendingOtp(null);
+      return {
+        success: false,
+        error: 'The 6-digit OTP has expired (10-minute limit). Please request a new code.',
+      };
+    }
+
+    if (cleanOtp.length !== 6 || cleanOtp !== pendingOtp.code) {
+      return {
+        success: false,
+        error: 'Invalid 6-digit OTP code. Please check the code dispatched to your email.',
+      };
+    }
+
+    // OTP matched! Log in and issue the 7-hour session token
+    const res = loginWithEmail(normalizedEmail);
+    if (res.success) {
+      setPendingOtp(null);
+    }
+    return res;
+  };
+
+  // Calculate remaining active time on the current token
+  const getActiveSessionRemainingTime = () => {
+    if (!authSession) return null;
+    const diffMs = authSession.expiresAt - Date.now();
+    if (diffMs <= 0) {
+      return { hours: 0, minutes: 0, isExpired: true, formatted: 'Expired' };
+    }
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return {
+      hours,
+      minutes,
+      isExpired: false,
+      formatted: `${hours}h ${minutes}m remaining`,
+    };
+  };
+
   const logout = (prefillEmail?: string) => {
     setIsAuthenticated(false);
+    setAuthSession(null);
+    setPendingOtp(null);
+    try {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(CURRENT_USER_KEY);
+    } catch {}
     if (prefillEmail) {
       setPendingLoginEmail(prefillEmail);
     } else {
       setPendingLoginEmail(null);
     }
-    try {
-      localStorage.setItem(AUTH_STATE_KEY, 'false');
-    } catch {}
   };
 
   const setCurrentUserId = (id: string) => {
+    const targetUser = users.find((u) => u.id === id);
+    if (!targetUser) return;
+
+    // Issue a fresh 7-hour session token for the selected user
+    const session = createSessionForUser(targetUser);
+    setAuthSession(session);
     setCurrentUserIdState(id);
     setIsAuthenticated(true);
     try {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
       localStorage.setItem(CURRENT_USER_KEY, id);
-      localStorage.setItem(AUTH_STATE_KEY, 'true');
     } catch {}
 
     // If switching to a CSM and the currently selected customer is not assigned to them, clear selection
-    const targetUser = users.find((u) => u.id === id);
-    if (targetUser && targetUser.role === 'CSM' && selectedCustomerId) {
+    if (targetUser.role === 'CSM' && selectedCustomerId) {
       const currentCust = allCustomers.find((c) => c.id === selectedCustomerId);
       if (currentCust && currentCust.csmId !== targetUser.id) {
         setSelectedCustomerIdState(null);
@@ -665,7 +864,8 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       customerData.startDate,
       customerData.annualRequirement,
       customerData.intervalMonths,
-      customerData.defaultDrillType
+      customerData.defaultDrillType,
+      customerData.licenseDetails?.managedDrillFrequency
     );
 
     const assignedCsm = customerData.csmId
@@ -906,15 +1106,20 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     drillIdOrMeeting: any,
     maybeMeeting?: any
   ): boolean => {
-    let targetYear: number;
-    let meetingData: ReviewMeeting;
+    let targetDrillId: string | undefined;
+    let targetYear: number | undefined;
+    let meetingData: ReviewMeeting | undefined;
 
     if (typeof yearOrDrillId === 'number') {
       targetYear = yearOrDrillId;
-      meetingData = maybeMeeting || drillIdOrMeeting;
+      if (typeof drillIdOrMeeting === 'string') {
+        targetDrillId = drillIdOrMeeting;
+        meetingData = maybeMeeting;
+      } else {
+        meetingData = drillIdOrMeeting;
+      }
     } else {
-      const cust = allCustomers.find((c) => c.id === customerId);
-      targetYear = cust?.currentYear || 2026;
+      targetDrillId = yearOrDrillId;
       meetingData = drillIdOrMeeting;
     }
 
@@ -924,23 +1129,45 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       prev.map((c) => {
         if (c.id !== customerId) return c;
 
-        const currentPlan = c.annualPlans[targetYear];
-        if (!currentPlan) return c;
+        const updatedAnnualPlans = { ...c.annualPlans };
+
+        Object.keys(updatedAnnualPlans).forEach((yrStr) => {
+          const yr = Number(yrStr);
+          if (targetYear !== undefined && yr !== targetYear) return;
+
+          const plan = updatedAnnualPlans[yr];
+          if (!plan) return;
+
+          let planChanged = false;
+          const updatedDrills = plan.drills.map((d) => {
+            if (targetDrillId && d.id !== targetDrillId) return d;
+            planChanged = true;
+            return {
+              ...d,
+              reviewMeeting:
+                meetingData && (meetingData.date || meetingData.status !== 'Not Scheduled')
+                  ? meetingData
+                  : undefined,
+            };
+          });
+
+          if (planChanged) {
+            updatedAnnualPlans[yr] = {
+              ...plan,
+              drills: updatedDrills,
+              reviewMeeting: meetingData,
+            };
+            updatedSuccess = true;
+          }
+        });
 
         const updatedCust: Customer = {
           ...c,
-          annualPlans: {
-            ...c.annualPlans,
-            [targetYear]: {
-              ...currentPlan,
-              reviewMeeting: meetingData,
-            },
-          },
+          annualPlans: updatedAnnualPlans,
           updatedAt: new Date().toISOString(),
         };
 
         persistCustomer(updatedCust);
-        updatedSuccess = true;
         return updatedCust;
       })
     );
@@ -966,7 +1193,8 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
           startDate,
           annualRequirement,
           intervalMonths,
-          defaultDrillType || 'Phishing Email Simulation'
+          defaultDrillType || 'Phishing Email Simulation',
+          c.licenseDetails?.managedDrillFrequency
         );
 
         const newPlan: AnnualPlan = {
@@ -1260,7 +1488,6 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       localStorage.setItem(CURRENT_USER_KEY, INITIAL_USERS[0].id);
       localStorage.setItem(DATE_STORAGE_KEY, SYSTEM_TODAY);
-      localStorage.setItem(AUTH_STATE_KEY, 'true');
     } catch {
       // ignore
     }
@@ -1333,9 +1560,13 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         users,
         currentUser,
         isAuthenticated,
+        authSession,
         pendingLoginEmail,
         setPendingLoginEmail,
         loginWithEmail,
+        sendLoginOtp,
+        verifyLoginOtp,
+        getActiveSessionRemainingTime,
         logout,
         setCurrentUserId,
         addCsmUser,

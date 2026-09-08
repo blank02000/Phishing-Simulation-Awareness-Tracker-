@@ -61,6 +61,69 @@ export function formatMonthShort(dateStr?: string): string {
 }
 
 /**
+ * Formats a date into a campaign execution month window (e.g. "JUL – AUG", "Mid July – Mid August").
+ * Phishing simulation campaigns span a 3-4 week period rather than a single fixed day.
+ */
+export function formatSimulationMonthWindow(
+  dateStr?: string,
+  mode: 'badge' | 'months' | 'detailed' | 'full' = 'badge'
+): string {
+  if (!dateStr) return '—';
+  try {
+    const d = parseDate(dateStr);
+    const day = d.getDate();
+    const startMonthShort = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+    const startMonthFull = d.toLocaleDateString('en-US', { month: 'short' });
+    const startMonthLong = d.toLocaleDateString('en-US', { month: 'long' });
+
+    // Simulation campaign window runs ~28 to 30 days
+    const endD = new Date(d);
+    endD.setDate(endD.getDate() + 28);
+    const endMonthShort = endD.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+    const endMonthFull = endD.toLocaleDateString('en-US', { month: 'short' });
+    const endMonthLong = endD.toLocaleDateString('en-US', { month: 'long' });
+
+    // Same month or cross month
+    const isCrossMonth = startMonthShort !== endMonthShort;
+
+    if (mode === 'badge') {
+      if (isCrossMonth) {
+        return `${startMonthShort} – ${endMonthShort}`;
+      }
+      return startMonthShort;
+    }
+
+    if (mode === 'months') {
+      if (isCrossMonth) {
+        return `${startMonthFull} – ${endMonthFull}`;
+      }
+      return startMonthFull;
+    }
+
+    if (mode === 'detailed') {
+      if (day >= 10 && day <= 24) {
+        return isCrossMonth
+          ? `Mid ${startMonthLong} – Mid ${endMonthLong}`
+          : `Mid ${startMonthLong}`;
+      } else if (day > 24) {
+        return isCrossMonth
+          ? `Late ${startMonthLong} – ${endMonthLong}`
+          : `Late ${startMonthLong}`;
+      } else {
+        return isCrossMonth
+          ? `Early ${startMonthLong} – Early ${endMonthLong}`
+          : `Early ${startMonthLong}`;
+      }
+    }
+
+    // Default 'full'
+    return isCrossMonth ? `${startMonthLong} – ${endMonthLong}` : startMonthLong;
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
  * Days difference between two YYYY-MM-DD strings (d2 - d1)
  */
 export function daysBetween(d1Str: string, d2Str: string): number {
@@ -70,8 +133,194 @@ export function daysBetween(d1Str: string, d2Str: string): number {
   return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 
+export const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+export interface SanctionedDrillPeriodInfo {
+  label: string; // e.g. "July – September 2026"
+  quarter?: number; // 1, 2, 3, 4
+  quarterLabel: string; // "Q3"
+  months: string[]; // ["July", "August", "September"]
+  startDate: string; // "2026-07-01"
+  endDate: string; // "2026-09-30"
+  isCurrentPeriod: boolean; // referenceDate is inside [startDate, endDate]
+  isPastPeriod: boolean; // referenceDate > endDate
+  isUpcomingPeriod: boolean; // referenceDate < startDate
+  daysRemainingInPeriod: number; // if current, days until endDate
+  daysOverdueIfPast: number; // if past, days since endDate
+  statusText: string;
+}
+
 /**
- * Evaluates drill status dynamically based on planned date, actual date, and current date
+ * Calculates the exact sanctioned period (e.g. quarterly 3-month window like July-September)
+ * for a drill given its index, frequency, and interval.
+ */
+export function calculateSanctionedPeriod(
+  startDateStr: string,
+  drillIndex: number,
+  intervalMonths: number = 3,
+  drillCount: number = 4,
+  frequencyStr?: string
+): {
+  label: string;
+  quarter?: number;
+  quarterLabel: string;
+  months: string[];
+  startDate: string;
+  endDate: string;
+} {
+  const baseDate = parseDate(startDateStr);
+  const baseYear = baseDate.getFullYear();
+  const freq = (frequencyStr || '').toLowerCase();
+  const isQuarterly = intervalMonths === 3 || drillCount === 4 || freq.includes('quarter');
+
+  if (isQuarterly) {
+    // Standard calendar quarters: Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
+    // Offset by start date month if license started mid-year
+    const startQuarterIndex = Math.floor(baseDate.getMonth() / 3);
+    const quarterIndex = (startQuarterIndex + drillIndex) % 4;
+    const yearOffset = Math.floor((startQuarterIndex + drillIndex) / 4);
+    const targetYear = baseYear + yearOffset;
+    const quarterNumber = quarterIndex + 1;
+
+    const startMonthIdx = quarterIndex * 3;
+    const endMonthIdx = startMonthIdx + 2;
+
+    const startM = MONTH_NAMES[startMonthIdx];
+    const endM = MONTH_NAMES[endMonthIdx];
+    const months = [
+      MONTH_NAMES[startMonthIdx],
+      MONTH_NAMES[startMonthIdx + 1],
+      MONTH_NAMES[endMonthIdx],
+    ];
+
+    const lastDayOfEndMonth = new Date(targetYear, endMonthIdx + 1, 0).getDate();
+    const startDate = `${targetYear}-${String(startMonthIdx + 1).padStart(2, '0')}-01`;
+    const endDate = `${targetYear}-${String(endMonthIdx + 1).padStart(2, '0')}-${String(
+      lastDayOfEndMonth
+    ).padStart(2, '0')}`;
+
+    return {
+      label: `${startM} – ${endM} ${targetYear}`,
+      quarter: quarterNumber,
+      quarterLabel: `Q${quarterNumber}`,
+      months,
+      startDate,
+      endDate,
+    };
+  }
+
+  // Monthly, Bi-Monthly, Half-Yearly, Yearly
+  const drillStartMonthOffset = baseDate.getMonth() + drillIndex * intervalMonths;
+  const targetYear = baseYear + Math.floor(drillStartMonthOffset / 12);
+  const startMonthIdx = drillStartMonthOffset % 12;
+  const endMonthIdx = (startMonthIdx + intervalMonths - 1) % 12;
+
+  const months: string[] = [];
+  for (let m = 0; m < intervalMonths; m++) {
+    months.push(MONTH_NAMES[(startMonthIdx + m) % 12]);
+  }
+
+  const lastDay = new Date(targetYear, endMonthIdx + 1, 0).getDate();
+  const startDate = `${targetYear}-${String(startMonthIdx + 1).padStart(2, '0')}-01`;
+  const endDate = `${targetYear}-${String(endMonthIdx + 1).padStart(2, '0')}-${String(lastDay).padStart(
+    2,
+    '0'
+  )}`;
+
+  const label =
+    intervalMonths === 1
+      ? `${MONTH_NAMES[startMonthIdx]} ${targetYear}`
+      : `${MONTH_NAMES[startMonthIdx]} – ${MONTH_NAMES[endMonthIdx]} ${targetYear}`;
+
+  const quarterNumber = Math.floor(startMonthIdx / 3) + 1;
+
+  return {
+    label,
+    quarter: quarterNumber,
+    quarterLabel: `Q${quarterNumber}`,
+    months,
+    startDate,
+    endDate,
+  };
+}
+
+/**
+ * Returns comprehensive sanctioned drill period information for any drill record.
+ * Works with new drills (with stored drillPeriod fields) or derives on the fly for backwards compatibility.
+ */
+export function getSanctionedDrillPeriod(
+  drill: DrillRecord,
+  referenceDate: string = SYSTEM_TODAY
+): SanctionedDrillPeriodInfo {
+  let startDate = drill.drillPeriodStart;
+  let endDate = drill.drillPeriodEnd;
+  let label = drill.drillPeriodLabel;
+  let months = drill.sanctionedMonths;
+  let quarter = drill.quarter;
+
+  if (!startDate || !endDate || !label || !months) {
+    const pDate = parseDate(drill.plannedDate || referenceDate);
+    const pYear = pDate.getFullYear();
+    const pMonth = pDate.getMonth();
+    const derivedQuarter = quarter || Math.floor(pMonth / 3) + 1;
+    const startMIdx = (derivedQuarter - 1) * 3;
+    const endMIdx = startMIdx + 2;
+    const lastDay = new Date(pYear, endMIdx + 1, 0).getDate();
+
+    startDate = `${pYear}-${String(startMIdx + 1).padStart(2, '0')}-01`;
+    endDate = `${pYear}-${String(endMIdx + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    months = [MONTH_NAMES[startMIdx], MONTH_NAMES[startMIdx + 1], MONTH_NAMES[endMIdx]];
+    label = `${MONTH_NAMES[startMIdx]} – ${MONTH_NAMES[endMIdx]} ${pYear}`;
+    quarter = derivedQuarter;
+  }
+
+  const isCurrentPeriod = referenceDate >= startDate && referenceDate <= endDate;
+  const isPastPeriod = referenceDate > endDate;
+  const isUpcomingPeriod = referenceDate < startDate;
+  const daysRemainingInPeriod = isCurrentPeriod ? Math.max(0, daysBetween(referenceDate, endDate)) : 0;
+  const daysOverdueIfPast = isPastPeriod ? Math.max(0, daysBetween(endDate, referenceDate)) : 0;
+
+  let statusText = '';
+  if (isCurrentPeriod) {
+    statusText = `Active Period (${label}) • ${daysRemainingInPeriod} days remaining to complete`;
+  } else if (isPastPeriod) {
+    statusText = `Missed Period (${label}) • Overdue by ${daysOverdueIfPast} days`;
+  } else {
+    statusText = `Upcoming Period (${label}) • Starts ${formatDisplayDate(startDate)}`;
+  }
+
+  return {
+    label,
+    quarter,
+    quarterLabel: `Q${quarter || 1}`,
+    months,
+    startDate,
+    endDate,
+    isCurrentPeriod,
+    isPastPeriod,
+    isUpcomingPeriod,
+    daysRemainingInPeriod,
+    daysOverdueIfPast,
+    statusText,
+  };
+}
+
+/**
+ * Evaluates drill status dynamically based on planned date, actual date, current date,
+ * and the sanctioned drill period window.
  */
 export function computeDrillStatus(
   drill: DrillRecord,
@@ -83,19 +332,47 @@ export function computeDrillStatus(
     return drill.status;
   }
 
+  // Always resolve the full sanctioned drill period window (e.g. 3-month window for quarterly drills)
+  const period = getSanctionedDrillPeriod(drill, referenceDate);
+
   // If actual completion date is recorded
   if (drill.actualCompletionDate) {
-    const isLate = drill.actualCompletionDate > drill.plannedDate;
+    const isLate = drill.actualCompletionDate > period.endDate;
     return isLate ? 'Completed Late' : 'Completed';
   }
 
-  // Drill is not completed yet: check planned date vs reference date
-  if (drill.plannedDate < referenceDate) {
+  // 1. OVERDUE CHECK:
+  // A drill is strictly ONLY overdue if the entire sanctioned drill period (e.g. 3-month quarter window)
+  // has passed without completion (referenceDate > period.endDate).
+  // If we are currently inside the 3-month period (or before it), it is NOT overdue!
+  if (referenceDate > period.endDate) {
     return 'Overdue';
   }
 
-  const daysUntil = daysBetween(referenceDate, drill.plannedDate);
-  if (daysUntil >= 0 && daysUntil <= dueSoonThresholdDays) {
+  // 2. ACTIVE SANCTIONED PERIOD (Inside the 3-month window):
+  if (period.isCurrentPeriod) {
+    // As long as we are in the 3-month period, it is NEVER overdue.
+    const daysUntilEnd = period.daysRemainingInPeriod;
+    const daysUntilPlanned = daysBetween(referenceDate, drill.plannedDate);
+
+    // It is marked "Due Soon" if:
+    // - The tentative planned launch date has arrived/passed (actively open drill to complete this quarter)
+    // - Or the planned launch date is approaching within threshold (e.g. <= 14 days)
+    // - Or the 3-month period is closing within threshold (e.g. <= 14 days)
+    if (
+      drill.plannedDate <= referenceDate ||
+      daysUntilPlanned <= dueSoonThresholdDays ||
+      daysUntilEnd <= dueSoonThresholdDays
+    ) {
+      return 'Due Soon';
+    }
+
+    return 'Upcoming';
+  }
+
+  // 3. UPCOMING PERIOD (The 3-month period hasn't started yet):
+  const daysUntilPlanned = daysBetween(referenceDate, drill.plannedDate);
+  if (daysUntilPlanned >= 0 && daysUntilPlanned <= dueSoonThresholdDays) {
     return 'Due Soon';
   }
 
@@ -134,35 +411,50 @@ export function computeDeliverableStatus(
 /**
  * Automatically generates a list of DrillRecords for an annual plan based on start date,
  * number of drills per year, interval in months, and drill type.
+ * Properly sanctions months for the customer drill period (e.g. July - September).
+ * NOTE: Review meetings are NOT pre-created; CSM creates them on demand.
  */
 export function generateAnnualTimeline(
   startDateStr: string,
   drillCount: number = 4,
   intervalMonths: number = 3,
-  defaultDrillType: DrillType = 'Phishing Email Simulation'
+  defaultDrillType: DrillType = 'Phishing Email Simulation',
+  frequencyStr?: string
 ): DrillRecord[] {
   const drills: DrillRecord[] = [];
   const baseDate = parseDate(startDateStr);
 
   for (let i = 0; i < drillCount; i++) {
-    // Add intervalMonths * i
+    const drillNumber = i + 1;
+    const period = calculateSanctionedPeriod(startDateStr, i, intervalMonths, drillCount, frequencyStr);
+
     const drillDate = new Date(baseDate);
     drillDate.setMonth(baseDate.getMonth() + i * intervalMonths);
     const plannedDate = formatDateISO(drillDate);
 
-    const drillNumber = i + 1;
     drills.push({
       id: `drill-${Date.now()}-${drillNumber}-${Math.random().toString(36).substring(2, 6)}`,
       drillNumber,
-      title: `Drill ${drillNumber} — ${formatQuarterOrMonth(drillDate, i + 1)}`,
+      title: `Drill ${drillNumber} — ${period.quarterLabel} (${period.label})`,
       plannedDate,
       drillType: defaultDrillType,
       status: 'Upcoming',
-      campaignName: `Q${i + 1} Phishing Simulation Campaign`,
-      reviewMeeting: {
-        required: true,
-        status: 'Not Scheduled',
-      },
+      campaignName: `${period.quarterLabel} Phishing Simulation Campaign`,
+      drillPeriodLabel: period.label,
+      drillPeriodStart: period.startDate,
+      drillPeriodEnd: period.endDate,
+      sanctionedMonths: period.months,
+      quarter: period.quarter,
+      frequency:
+        frequencyStr ||
+        (intervalMonths === 3
+          ? 'Quarterly'
+          : intervalMonths === 1
+          ? 'Monthly'
+          : intervalMonths === 6
+          ? 'Half Yearly'
+          : 'Yearly'),
+      // Review meetings are NOT pre-created. CSM creates them on demand.
     });
   }
 
@@ -170,8 +462,9 @@ export function generateAnnualTimeline(
 }
 
 function formatQuarterOrMonth(date: Date, drillNum: number): string {
-  const month = date.toLocaleDateString('en-US', { month: 'short' });
-  return `Q${Math.min(drillNum, 4)} (${month})`;
+  const dateStr = formatDateISO(date);
+  const monthWindow = formatSimulationMonthWindow(dateStr, 'months');
+  return `Q${Math.min(drillNum, 4)} (${monthWindow})`;
 }
 
 /**
@@ -249,7 +542,11 @@ export function calculateCustomerCompliance(
       reportingRateCount++;
     }
 
-    if (drill.reviewMeeting) {
+    if (
+      drill.reviewMeeting &&
+      drill.reviewMeeting.status !== 'Not Scheduled' &&
+      drill.reviewMeeting.date
+    ) {
       if (drill.reviewMeeting.status === 'Completed') {
         reviewMeetingsCompletedCount++;
         lastReviewMeeting = { drillNumber: drill.drillNumber, meeting: drill.reviewMeeting };
@@ -295,7 +592,8 @@ export function calculateCustomerCompliance(
 }
 
 /**
- * Generates proactive operational reminders and action items across all customers
+ * Generates proactive operational reminders and action items across all customers,
+ * with first-class support for Sanctioned Drill Periods (e.g. July - September Q3 window).
  */
 export function generateReminders(
   customers: Customer[],
@@ -310,10 +608,11 @@ export function generateReminders(
     if (!plan || !plan.drills) continue;
 
     for (const drill of plan.drills) {
+      const period = getSanctionedDrillPeriod(drill, referenceDate);
       const status = computeDrillStatus(drill, referenceDate, dueSoonDays);
 
       if (status === 'Overdue') {
-        const daysAgo = daysBetween(drill.plannedDate, referenceDate);
+        const daysAgo = period.daysOverdueIfPast || daysBetween(drill.plannedDate, referenceDate);
         reminders.push({
           id: `rem-overdue-${customer.id}-${drill.id}`,
           customerId: customer.id,
@@ -322,10 +621,40 @@ export function generateReminders(
           drillNumber: drill.drillNumber,
           type: 'drill_overdue',
           severity: 'high',
-          title: `${customer.companyName} — Drill ${drill.drillNumber} is overdue`,
-          description: `Planned for ${formatDisplayDate(drill.plannedDate)} (${daysAgo} days overdue).`,
-          dueDate: drill.plannedDate,
+          title: `${customer.companyName} — Drill ${drill.drillNumber} Overdue (Missed ${period.label})`,
+          description: `Sanctioned drill period (${period.label}) ended without completion (${daysAgo} days overdue).`,
+          dueDate: period.endDate || drill.plannedDate,
           actionLabel: 'Mark Drill Completed',
+          sanctionedPeriodLabel: period.label,
+          sanctionedMonths: period.months,
+          quarter: period.quarter,
+          daysRemainingInPeriod: 0,
+          isCurrentActivePeriod: false,
+        });
+      } else if (
+        period.isCurrentPeriod &&
+        !drill.actualCompletionDate &&
+        drill.status !== 'Cancelled' &&
+        drill.status !== 'Not Completed'
+      ) {
+        // Active quarterly drill period (e.g. July - September)
+        reminders.push({
+          id: `rem-active-period-${customer.id}-${drill.id}`,
+          customerId: customer.id,
+          companyName: customer.companyName,
+          drillId: drill.id,
+          drillNumber: drill.drillNumber,
+          type: 'drill_active_period',
+          severity: period.daysRemainingInPeriod <= 30 ? 'high' : 'medium',
+          title: `${customer.companyName} — Drill ${drill.drillNumber}: ${period.label} Active`,
+          description: `Sanctioned 3-month drill period (${period.label}) is open. Complete simulation before quarter ends (${period.daysRemainingInPeriod} days remaining).`,
+          dueDate: period.endDate,
+          actionLabel: 'Fill / Complete Drill',
+          sanctionedPeriodLabel: period.label,
+          sanctionedMonths: period.months,
+          quarter: period.quarter,
+          daysRemainingInPeriod: period.daysRemainingInPeriod,
+          isCurrentActivePeriod: true,
         });
       } else if (status === 'Due Soon') {
         const daysLeft = daysBetween(referenceDate, drill.plannedDate);
@@ -337,17 +666,28 @@ export function generateReminders(
           drillNumber: drill.drillNumber,
           type: 'drill_due_soon',
           severity: 'medium',
-          title: `${customer.companyName} — Drill ${drill.drillNumber} is due soon`,
-          description: `Scheduled for ${formatDisplayDate(drill.plannedDate)} (${daysLeft === 0 ? 'Due Today' : `in ${daysLeft} days`}).`,
+          title: `${customer.companyName} — Drill ${drill.drillNumber} due soon (${period.label})`,
+          description: `Scheduled execution for ${formatDisplayDate(drill.plannedDate)} (${
+            daysLeft === 0 ? 'Due Today' : `in ${daysLeft} days`
+          }).`,
           dueDate: drill.plannedDate,
-          actionLabel: 'View Schedule',
+          actionLabel: 'Fill / Complete Drill',
+          sanctionedPeriodLabel: period.label,
+          sanctionedMonths: period.months,
+          quarter: period.quarter,
+          daysRemainingInPeriod: period.daysRemainingInPeriod,
+          isCurrentActivePeriod: period.isCurrentPeriod,
         });
       }
 
-      // Check review meeting status
-      if (drill.reviewMeeting && drill.reviewMeeting.status === 'Scheduled' && drill.reviewMeeting.date) {
+      // Check review meeting status ONLY IF actually created/scheduled by CSM
+      if (
+        drill.reviewMeeting &&
+        drill.reviewMeeting.status === 'Scheduled' &&
+        drill.reviewMeeting.date
+      ) {
         const daysUntilMeeting = daysBetween(referenceDate, drill.reviewMeeting.date);
-        if (daysUntilMeeting >= 0 && daysUntilMeeting <= 7) {
+        if (daysUntilMeeting >= 0 && daysUntilMeeting <= 14) {
           const dayLabel =
             daysUntilMeeting === 0
               ? 'Today'
@@ -363,7 +703,9 @@ export function generateReminders(
             type: 'meeting_scheduled',
             severity: 'low',
             title: `${customer.companyName} — Review Meeting scheduled ${dayLabel}`,
-            description: `Review meeting for Drill ${drill.drillNumber} on ${formatDisplayDate(drill.reviewMeeting.date)}.`,
+            description: `CSM Debrief meeting for Drill ${drill.drillNumber} on ${formatDisplayDate(
+              drill.reviewMeeting.date
+            )}.`,
             dueDate: drill.reviewMeeting.date,
             actionLabel: 'Open Meeting Details',
           });
@@ -374,7 +716,6 @@ export function generateReminders(
     // Check if customer is significantly behind on annual quota
     const compliance = calculateCustomerCompliance(customer, year, referenceDate, dueSoonDays);
     if (compliance.overallStatus !== 'Completed' && compliance.completedCount < compliance.annualRequirement) {
-      // If reference date is in late Q3 or Q4 and completed < half
       const currentMonth = parseDate(referenceDate).getMonth() + 1; // 1-12
       if (currentMonth >= 8 && compliance.completedCount <= compliance.annualRequirement / 2) {
         reminders.push({

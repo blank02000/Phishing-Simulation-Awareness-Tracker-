@@ -8,7 +8,6 @@ import {
   Calendar,
   Bell,
   FileBarChart2,
-  Settings,
   Plus,
   Clock,
   RotateCcw,
@@ -22,8 +21,7 @@ export type NavTab =
   | 'reminders'
   | 'reports'
   | 'reviews'
-  | 'team'
-  | 'settings';
+  | 'team';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -55,7 +53,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       badge: urgentCount > 0 ? urgentCount : undefined,
     },
     { id: 'reports', label: 'Reports & Digests', icon: <FileBarChart2 className="w-4 h-4" /> },
-    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
   return (

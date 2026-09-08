@@ -9,8 +9,11 @@ import {
   computeDeliverableStatus,
   formatDisplayDate,
   formatMonthShort,
+  formatSimulationMonthWindow,
+  getSanctionedDrillPeriod,
 } from '../utils/drillCalculator';
 import { TimelineVisualizer } from './common/TimelineVisualizer';
+import { DrillComplianceChart } from './common/DrillComplianceChart';
 import {
   ComplianceStatusBadge,
   DrillStatusBadge,
@@ -575,8 +578,22 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
         </div>
       ) : (
         <>
+          {/* Annual Drill Compliance & Completion Health Visualization */}
+          <DrillComplianceChart
+            drills={drills}
+            compliance={compliance}
+            selectedYear={selectedYear}
+            availableYears={availableYears}
+            onSelectYear={(yr) => {
+              setSelectedYear(yr);
+              setSelectedDrillId(undefined);
+            }}
+            referenceDate={referenceDate}
+            dueSoonDays={dueSoonDays}
+          />
+
           {/* Year Selection Tabs & Timeline Section */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         {/* Timeline Header bar with Year Tabs */}
         <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -647,6 +664,12 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
             const status = computeDrillStatus(drill, referenceDate, dueSoonDays);
             const isCompleted = status === 'Completed' || status === 'Completed Late';
             const isSelected = selectedDrillId === drill.id;
+            const period = getSanctionedDrillPeriod(drill, referenceDate);
+            const hasReviewMeeting = Boolean(
+              drill.reviewMeeting &&
+                drill.reviewMeeting.date &&
+                drill.reviewMeeting.status !== 'Not Scheduled'
+            );
 
             return (
               <div
@@ -669,11 +692,34 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
                         <h3 className="font-bold text-slate-900 text-sm">{drill.title}</h3>
                         <DrillStatusBadge status={status} size="sm" />
                         <DrillResultBadge result={drill.overallResult} />
+                        {period.isCurrentPeriod && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 animate-pulse">
+                            Active Drill Quarter
+                          </span>
+                        )}
                       </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        Planned: <span className="font-semibold text-slate-700">{formatDisplayDate(drill.plannedDate)}</span>
-                        {drill.drillType && ` • Type: ${drill.drillType}`}
-                        {drill.campaignName && ` • Campaign: ${drill.campaignName}`}
+                      <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          className={`px-2 py-0.5 rounded font-semibold border ${
+                            period.isCurrentPeriod
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : period.isPastPeriod
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-100/80'
+                          }`}
+                        >
+                          Period: {period.label} ({period.quarterLabel})
+                          {period.isCurrentPeriod && ` • ${period.daysRemainingInPeriod}d left`}
+                        </span>
+                        <span>
+                          Target Launch: <span className="font-semibold text-slate-700">{formatDisplayDate(drill.plannedDate)}</span>
+                        </span>
+                        {drill.drillType && (
+                          <span>• Type: <span className="font-medium text-slate-700">{drill.drillType}</span></span>
+                        )}
+                        {drill.campaignName && (
+                          <span>• Campaign: <span className="font-medium text-slate-700">{drill.campaignName}</span></span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -703,11 +749,15 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onOpenReviewMeeting(customer, drill)}
-                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
-                      title="Manage Review Meeting"
+                      className={`px-3 py-1.5 border rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                        hasReviewMeeting
+                          ? 'border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800'
+                          : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                      }`}
+                      title={hasReviewMeeting ? 'Manage Scheduled Review Meeting' : 'Schedule Review Meeting'}
                     >
                       <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Review Meeting</span>
+                      <span>{hasReviewMeeting ? `Meeting (${drill.reviewMeeting?.status})` : '+ Review Meeting'}</span>
                     </button>
 
                     {!isCompleted ? (
@@ -771,10 +821,12 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs text-slate-500 flex items-center justify-between">
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs text-slate-600 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-slate-400" />
-                        <span>Planned for {formatDisplayDate(drill.plannedDate)}. Results and simulation metrics will be recorded upon completion.</span>
+                        <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span>
+                          Sanctioned Drill Window: <strong className="text-slate-800 font-semibold">{period.label}</strong> (launch scheduled: {formatDisplayDate(drill.plannedDate)}). CSM can fill drill results when completed.
+                        </span>
                       </div>
                     </div>
                   )}
@@ -805,17 +857,17 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
                     </div>
                   )}
 
-                  {/* Review Meeting Section */}
-                  <div className="pt-3 border-t border-slate-100">
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                        <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
-                        Drill {drill.drillNumber} Review Debrief Meeting
-                      </span>
-                      <ReviewMeetingStatusBadge status={drill.reviewMeeting?.status || 'Not Scheduled'} />
-                    </div>
+                  {/* Review Meeting Section: Rendered ONLY when CSM creates one */}
+                  {hasReviewMeeting && drill.reviewMeeting && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-xs mb-2">
+                        <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                          Drill {drill.drillNumber} Debrief Meeting (CSM Created)
+                        </span>
+                        <ReviewMeetingStatusBadge status={drill.reviewMeeting.status} />
+                      </div>
 
-                    {drill.reviewMeeting && drill.reviewMeeting.status !== 'Not Scheduled' ? (
                       <div className="bg-blue-50/40 p-3.5 rounded-xl border border-blue-100 text-xs space-y-1.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="font-medium text-slate-800">
@@ -841,12 +893,8 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
                           </div>
                         )}
                       </div>
-                    ) : (
-                      <div className="text-[11px] text-slate-400 italic">
-                        No review meeting scheduled yet. Click &quot;Review Meeting&quot; above to log debrief notes or schedule session.
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

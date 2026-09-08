@@ -37,11 +37,22 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     users,
     currentUser,
     setCurrentUserId,
+    authSession,
+    getActiveSessionRemainingTime,
     logout,
   } = useCustomerContext();
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [sessionRemaining, setSessionRemaining] = useState(() => getActiveSessionRemainingTime());
+
+  // Update session remaining display every 15s
+  React.useEffect(() => {
+    const update = () => setSessionRemaining(getActiveSessionRemainingTime());
+    update();
+    const timer = setInterval(update, 15000);
+    return () => clearInterval(timer);
+  }, [authSession]);
 
   const isAdmin = currentUser.role === 'Admin';
 
@@ -136,14 +147,24 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         {activeTab === 'team' && (
           <span className="text-slate-900 font-bold">CSM Team & Portfolio Allocation</span>
         )}
-
-        {activeTab === 'settings' && (
-          <span className="text-slate-900 font-bold">System Configuration</span>
-        )}
       </div>
 
       {/* Right: Role Switcher, Reference Date & Actions */}
       <div className="flex items-center gap-3">
+        {/* Active Session Duration Badge */}
+        {authSession && (
+          <div
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 shadow-2xs"
+            title={`Active Session Token: ${authSession.token}\nValid for 7 hours from login`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="font-semibold text-slate-800">
+              {sessionRemaining?.formatted || '7h Active'}
+            </span>
+          </div>
+        )}
+
         {/* Interactive User Role Switcher */}
         <div className="relative">
           <button
@@ -188,6 +209,24 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 <p className="text-[11px] text-slate-500 mt-1">
                   Logged in as <strong className="text-slate-700">{currentUser.name}</strong> ({currentUser.role}).
                 </p>
+
+                {/* Session Token Detail Box */}
+                {authSession && (
+                  <div className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] space-y-1">
+                    <div className="flex items-center justify-between font-bold text-slate-700">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-blue-600" />
+                        7-Hour Active Token
+                      </span>
+                      <span className="text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded font-extrabold">
+                        {sessionRemaining?.formatted || 'Active'}
+                      </span>
+                    </div>
+                    <div className="text-slate-400 font-mono truncate">
+                      ID: {authSession.token.slice(0, 22)}...
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="py-2">
