@@ -82,10 +82,14 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
     deleteCustomer,
     updateCustomer,
     assignCustomerCsm,
+    canUserEditCustomer,
+    canUserDeleteCustomer,
   } = useCustomerContext();
   const customer = customers.find((c) => c.id === customerId);
 
   const isAdmin = currentUser.role === 'Admin';
+  const canEdit = customer ? (isAdmin || canUserEditCustomer(currentUser, customer)) : false;
+  const canDelete = customer ? (isAdmin || canUserDeleteCustomer(currentUser, customer)) : false;
   const csmUsers = users.filter((u) => u.role === 'CSM');
 
   // Available plan years for this customer
@@ -116,6 +120,20 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
     review?: ReviewMeeting | null;
     isOverdue?: boolean;
   }>({ isOpen: false });
+
+  const [isDeleteCustomerOpen, setIsDeleteCustomerOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteCustomer = async () => {
+    if (!customer) return;
+    setIsDeleting(true);
+    const res = await deleteCustomer(customer.id);
+    setIsDeleting(false);
+    if (res.success) {
+      setIsDeleteCustomerOpen(false);
+      onBack();
+    }
+  };
 
   if (!customer) {
     return (
@@ -180,15 +198,31 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
             <span>Email Customer</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleOpenEditCustomer('profile')}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-200 shadow-2xs"
-            title="Edit customer account details, dates, and drill schedules"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-            <span>Edit Customer & Dates</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              id="btn-edit-customer"
+              onClick={() => handleOpenEditCustomer('profile')}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-200 shadow-2xs cursor-pointer"
+              title="Edit customer account details, dates, and drill schedules"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+              <span>Edit Customer & Dates</span>
+            </button>
+          )}
+
+          {canDelete && (
+            <button
+              type="button"
+              id="btn-delete-customer"
+              onClick={() => setIsDeleteCustomerOpen(true)}
+              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-rose-200 cursor-pointer"
+              title="Permanently delete customer account"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Delete Customer</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -1029,6 +1063,53 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
           review={emailModalData.review}
           isOverdue={emailModalData.isOverdue}
         />
+      )}
+
+      {/* Delete Customer Confirmation Dialog */}
+      {isDeleteCustomerOpen && (
+        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Delete Customer Account?
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Are you sure you want to permanently delete <strong className="text-slate-800">{customer.companyName}</strong>?
+                </p>
+                <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 space-y-1">
+                  <p className="font-semibold">⚠️ Irreversible Action</p>
+                  <p>
+                    This will permanently delete all {Object.keys(customer.annualPlans).length} annual plan(s), quarterly drills, compliance debrief records, and LMS training modules.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteCustomerOpen(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-delete-customer"
+                onClick={handleDeleteCustomer}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete Customer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

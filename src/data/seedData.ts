@@ -1,4 +1,4 @@
-import { Customer, UserAccount } from '../types';
+import { Customer, UserAccount, DEFAULT_ADMIN_PERMISSIONS, DEFAULT_CSM_PERMISSIONS } from '../types';
 
 export const INITIAL_USERS: UserAccount[] = [
   {
@@ -9,6 +9,7 @@ export const INITIAL_USERS: UserAccount[] = [
     title: 'Director of SecOps (Admin)',
     avatarColor: 'bg-purple-600',
     status: 'Active',
+    permissions: DEFAULT_ADMIN_PERMISSIONS,
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
@@ -19,6 +20,51 @@ export const INITIAL_USERS: UserAccount[] = [
     title: 'Lead SecOps Specialist (Admin)',
     avatarColor: 'bg-blue-600',
     status: 'Active',
+    permissions: DEFAULT_ADMIN_PERMISSIONS,
+    createdAt: '2026-01-01T08:00:00Z',
+  },
+  {
+    id: 'user-csm-gokulalakshmi',
+    name: 'R. Gokulalakshmi',
+    email: 'r.gokulalakshmi@progist.net',
+    role: 'CSM',
+    title: 'Customer Success Manager',
+    avatarColor: 'bg-teal-600',
+    status: 'Active',
+    permissions: DEFAULT_CSM_PERMISSIONS,
+    createdAt: '2026-01-01T08:00:00Z',
+  },
+  {
+    id: 'user-csm-nancy',
+    name: 'Nancy Rajput',
+    email: 'nancy.rajput@progist.net',
+    role: 'CSM',
+    title: 'Customer Success Manager',
+    avatarColor: 'bg-emerald-600',
+    status: 'Active',
+    permissions: DEFAULT_CSM_PERMISSIONS,
+    createdAt: '2026-01-01T08:00:00Z',
+  },
+  {
+    id: 'user-csm-tasmiya',
+    name: 'Tasmiya Zaman',
+    email: 'tasmiya.zaman@progist.net',
+    role: 'CSM',
+    title: 'Customer Success Manager',
+    avatarColor: 'bg-indigo-600',
+    status: 'Active',
+    permissions: DEFAULT_CSM_PERMISSIONS,
+    createdAt: '2026-01-01T08:00:00Z',
+  },
+  {
+    id: 'user-csm-sonia',
+    name: 'Sonia Dsouza',
+    email: 'sonia.dsouza@progist.net',
+    role: 'CSM',
+    title: 'Customer Success Manager',
+    avatarColor: 'bg-rose-600',
+    status: 'Active',
+    permissions: DEFAULT_CSM_PERMISSIONS,
     createdAt: '2026-01-01T08:00:00Z',
   },
 ];

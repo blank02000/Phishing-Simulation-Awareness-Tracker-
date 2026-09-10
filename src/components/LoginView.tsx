@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useCustomerContext } from '../context/CustomerContext';
 import {
   Shield,
+  ShieldCheck,
   Mail,
   ArrowRight,
   Lock,
@@ -19,7 +20,6 @@ import {
 
 export const LoginView: React.FC = () => {
   const {
-    users,
     loginWithEmail,
     sendLoginOtp,
     verifyLoginOtp,
@@ -46,12 +46,9 @@ export const LoginView: React.FC = () => {
   useEffect(() => {
     if (pendingLoginEmail) {
       setEmailInput(pendingLoginEmail);
-      setPasswordInput(pendingLoginEmail);
+      setPasswordInput('');
     }
   }, [pendingLoginEmail]);
-
-  const adminUsers = users.filter((u) => u.role === 'Admin');
-  const csmUsers = users.filter((u) => u.role === 'CSM' && u.status === 'Active');
 
   // Direct small email-and-password login
   const handleDirectLogin = (e?: React.FormEvent, targetEmail?: string, targetPassword?: string) => {
@@ -67,7 +64,7 @@ export const LoginView: React.FC = () => {
     }
 
     if (!passwordToUse.trim()) {
-      setErrorMsg('Please enter your password. (For now, your password is the same as your email ID).');
+      setErrorMsg('Please enter your account password.');
       return;
     }
 
@@ -418,19 +415,6 @@ export const LoginView: React.FC = () => {
                     >
                       Password
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (emailInput.trim()) {
-                          setPasswordInput(emailInput.trim());
-                          if (errorMsg) setErrorMsg(null);
-                        }
-                      }}
-                      className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline"
-                      title="For now, sets password to match the email entered above"
-                    >
-                      Use Email as Password
-                    </button>
                   </div>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -444,7 +428,7 @@ export const LoginView: React.FC = () => {
                         setPasswordInput(e.target.value);
                         if (errorMsg) setErrorMsg(null);
                       }}
-                      placeholder="Enter your password (same as email ID)"
+                      placeholder="Enter your account password"
                       required
                       className="w-full pl-9.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                     />
@@ -458,8 +442,9 @@ export const LoginView: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    Default rule: Your login password is currently configured as your email address.
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Protected with end-to-end encryption. Session active for 7 hours.</span>
                   </p>
                 </div>
               )}
@@ -519,101 +504,7 @@ export const LoginView: React.FC = () => {
             </form>
           )}
 
-          {/* Quick Authorized Accounts Selector for testing & convenience */}
-          <div className="pt-4 border-t border-slate-100 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Authorized Team Accounts
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">1-Click Sign In</span>
-            </div>
-
-            <div className="space-y-2">
-              {/* Admin Accounts */}
-              {adminUsers.map((admin) => (
-                <button
-                  key={admin.id}
-                  type="button"
-                  id={`btn-quick-login-${admin.id}`}
-                  onClick={() => {
-                    setEmailInput(admin.email);
-                    setPasswordInput(admin.email);
-                    if (useOtpMode) {
-                      handleRequestOtp(undefined, admin.email);
-                    } else {
-                      handleDirectLogin(undefined, admin.email, admin.email);
-                    }
-                  }}
-                  className="w-full p-2.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100/70 text-left flex items-center justify-between transition-all group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
-                      {admin.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-900 group-hover:text-purple-900 flex items-center gap-1.5">
-                        <span className="truncate">{admin.name}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-purple-200 text-purple-800 text-[9px] font-extrabold shrink-0">
-                          Admin
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate">{admin.email}</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                </button>
-              ))}
-
-              {/* CSM Accounts */}
-              {csmUsers.map((csm) => (
-                <button
-                  key={csm.id}
-                  type="button"
-                  id={`btn-quick-login-${csm.id}`}
-                  onClick={() => {
-                    setEmailInput(csm.email);
-                    setPasswordInput(csm.email);
-                    if (useOtpMode) {
-                      handleRequestOtp(undefined, csm.email);
-                    } else {
-                      handleDirectLogin(undefined, csm.email, csm.email);
-                    }
-                  }}
-                  className="w-full p-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-100/70 text-left flex items-center justify-between transition-all group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={`w-8 h-8 rounded-lg ${
-                        csm.avatarColor || 'bg-emerald-600'
-                      } text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs`}
-                    >
-                      {csm.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-900 flex items-center gap-1.5">
-                        <span className="truncate">{csm.name}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800 text-[9px] font-extrabold shrink-0">
-                          CSM
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate">{csm.email}</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                </button>
-              ))}
-
-              {csmUsers.length === 0 && (
-                <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
-                  <p className="text-[11px] text-slate-500">
-                    No CSM accounts added yet. Log in as Admin to invite CSM team members.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="pt-2 text-center">
+          <div className="pt-2 text-center border-t border-slate-100">
             <p className="text-[11px] text-slate-400">
               Secured with Token-Based Session Management & Role-Based Access Control
             </p>

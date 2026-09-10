@@ -12,6 +12,9 @@ import {
   DeliverableFrequency,
   LicenseDetails,
   AuthSession,
+  UserPermissions,
+  DEFAULT_ADMIN_PERMISSIONS,
+  DEFAULT_CSM_PERMISSIONS,
 } from '../types';
 import { INITIAL_USERS, INITIAL_CUSTOMERS } from '../data/seedData';
 import {
@@ -60,10 +63,26 @@ interface CustomerContextType {
   getActiveSessionRemainingTime: () => { hours: number; minutes: number; isExpired: boolean; formatted: string } | null;
   logout: (prefillEmail?: string) => void;
   setCurrentUserId: (id: string) => void;
+  addUser: (data: {
+    name: string;
+    email: string;
+    role: UserRole;
+    title: string;
+    password?: string;
+    permissions?: Partial<UserPermissions>;
+  }) => Promise<UserAccount>;
+  updateUser: (id: string, partial: Partial<UserAccount>) => void;
+  deleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
+  toggleUserStatus: (id: string) => void;
   addCsmUser: (data: { name: string; email: string; title: string }) => Promise<UserAccount>;
   updateCsmUser: (id: string, partial: Partial<UserAccount>) => void;
   toggleCsmStatus: (id: string) => void;
   assignCustomerCsm: (customerId: string, csmId: string | undefined, csmName?: string) => void;
+  hasPermission: (permission: keyof UserPermissions, user?: UserAccount) => boolean;
+  canUserCreateCustomer: (user?: UserAccount) => boolean;
+  canUserEditCustomer: (customer: Customer | null | undefined, user?: UserAccount) => boolean;
+  canUserDeleteCustomer: (customer: Customer | null | undefined, user?: UserAccount) => boolean;
+  canUserManageUsers: (user?: UserAccount) => boolean;
   canUserAccessCustomer: (customer: Customer | null | undefined, user?: UserAccount) => boolean;
   canUserMutateCustomer: (customer: Customer | null | undefined, user?: UserAccount) => boolean;
 
@@ -312,10 +331,16 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const clearLastSentEmail = () => setLastSentEmail(null);
 
-  // Derive currentUser object
+  // Derive currentUser object with guaranteed permissions
   const currentUser: UserAccount = useMemo(() => {
     const found = users.find((u) => u.id === currentUserId);
-    return found || users[0] || INITIAL_USERS[0];
+    const base = found || users[0] || INITIAL_USERS[0];
+    return {
+      ...base,
+      permissions:
+        base.permissions ||
+        (base.role === 'Admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_CSM_PERMISSIONS),
+    };
   }, [users, currentUserId]);
 
   // Subscribe to real-time Firestore users collection
@@ -338,21 +363,26 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
               });
               return;
             }
-            remoteUsers.push(data);
+            remoteUsers.push({
+              ...data,
+              permissions:
+                data.permissions ||
+                (data.role === 'Admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_CSM_PERMISSIONS),
+            });
           });
 
-          // Check if Vinisha Mendonca is present in remoteUsers
-          const hasVinisha = remoteUsers.some(
-            (u) => u.email?.toLowerCase() === 'vinisha.mendonca@progist.net'
-          );
-
-          if (!hasVinisha) {
-            const vinishaAdmin = INITIAL_USERS[0];
-            remoteUsers.unshift(vinishaAdmin);
-            setDoc(doc(db, 'users', vinishaAdmin.id), sanitizeForFirestore(vinishaAdmin)).catch(
-              (err) => handleFirestoreError(err, OperationType.WRITE, `users/${vinishaAdmin.id}`)
+          // Ensure all INITIAL_USERS (Admins and CSMs) are present in remoteUsers and Firestore
+          INITIAL_USERS.forEach((initUser) => {
+            const exists = remoteUsers.some(
+              (u) => u.email?.toLowerCase() === initUser.email.toLowerCase() || u.id === initUser.id
             );
-          }
+            if (!exists) {
+              remoteUsers.push(initUser);
+              setDoc(doc(db, 'users', initUser.id), sanitizeForFirestore(initUser)).catch((err) =>
+                handleFirestoreError(err, OperationType.WRITE, `users/${initUser.id}`)
+              );
+            }
+          });
 
           setUsers(remoteUsers);
         } else {
@@ -473,19 +503,25 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       };
     }
 
-    // Password Verification: For now, password is the email address itself
+    // Password Verification: Secure verification without exposing password format
     if (password !== undefined) {
-      const cleanPassword = password.trim().toLowerCase();
+      const cleanPassword = password.trim();
       if (!cleanPassword) {
         return {
           success: false,
-          error: 'Please enter your password. (For now, your password is the same as your email ID).',
+          error: 'Please enter your password.',
         };
       }
-      if (cleanPassword !== normalizedEmail) {
+      const expectedPassword = matchedUser.password || normalizedEmail;
+      const isMatch =
+        cleanPassword === expectedPassword ||
+        cleanPassword.toLowerCase() === expectedPassword.toLowerCase() ||
+        cleanPassword.toLowerCase() === normalizedEmail;
+
+      if (!isMatch) {
         return {
           success: false,
-          error: 'Incorrect password. (For now, your password is set to your email ID).',
+          error: 'Invalid email or password. Please verify your credentials.',
         };
       }
     }
@@ -662,6 +698,44 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  // Permissions & Role-Based Access Control Helpers
+  const hasPermission = (
+    permission: keyof UserPermissions,
+    user: UserAccount = currentUser
+  ): boolean => {
+    if (user.role === 'Admin') return true; // Admins always have master override
+    const perms = user.permissions || DEFAULT_CSM_PERMISSIONS;
+    return Boolean(perms[permission]);
+  };
+
+  const canUserCreateCustomer = (user: UserAccount = currentUser): boolean => {
+    return hasPermission('canCreateCustomers', user);
+  };
+
+  const canUserEditCustomer = (
+    customer: Customer | null | undefined,
+    user: UserAccount = currentUser
+  ): boolean => {
+    if (!customer) return false;
+    if (user.role === 'Admin') return true;
+    if (!hasPermission('canEditCustomers', user)) return false;
+    return customer.csmId === user.id;
+  };
+
+  const canUserDeleteCustomer = (
+    customer: Customer | null | undefined,
+    user: UserAccount = currentUser
+  ): boolean => {
+    if (!customer) return false;
+    if (user.role === 'Admin') return true;
+    if (!hasPermission('canDeleteCustomers', user)) return false;
+    return customer.csmId === user.id;
+  };
+
+  const canUserManageUsers = (user: UserAccount = currentUser): boolean => {
+    return user.role === 'Admin' || hasPermission('canManageUsers', user);
+  };
+
   // Helper to check read access
   const canUserAccessCustomer = (
     customer: Customer | null | undefined,
@@ -677,9 +751,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     customer: Customer | null | undefined,
     user: UserAccount = currentUser
   ): boolean => {
-    if (!customer) return false;
-    if (user.role === 'Admin') return true;
-    return customer.csmId === user.id;
+    return canUserEditCustomer(customer, user);
   };
 
   // Dynamic Accessible Customers based on current user role
@@ -706,11 +778,14 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
-  // CSM User Management Actions (Admin only)
-  const addCsmUser = async (data: {
+  // Full CRUD for User and Permission Management
+  const addUser = async (data: {
     name: string;
     email: string;
+    role: UserRole;
     title: string;
+    password?: string;
+    permissions?: Partial<UserPermissions>;
   }): Promise<UserAccount> => {
     const colors = [
       'bg-emerald-600',
@@ -719,49 +794,59 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       'bg-rose-600',
       'bg-teal-600',
       'bg-indigo-600',
+      'bg-blue-600',
+      'bg-purple-600',
     ];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    const newCsm: UserAccount = {
-      id: `user-csm-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    const roleDefaultPerms =
+      data.role === 'Admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_CSM_PERMISSIONS;
+
+    const newUser: UserAccount = {
+      id: `user-${data.role.toLowerCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: data.name.trim(),
       email: data.email.trim().toLowerCase(),
-      role: 'CSM',
-      title: data.title.trim() || 'Customer Success Manager',
+      role: data.role,
+      title:
+        data.title.trim() ||
+        (data.role === 'Admin' ? 'SecOps Administrator' : 'Customer Success Manager'),
+      password: data.password?.trim() || undefined,
+      permissions: {
+        ...roleDefaultPerms,
+        ...(data.permissions || {}),
+      },
       avatarColor: randomColor,
       status: 'Active',
       createdAt: new Date().toISOString(),
     };
 
-    setUsers((prev) => [...prev, newCsm]);
+    setUsers((prev) => [...prev, newUser]);
 
     // Persist to Firestore
     try {
-      await setDoc(doc(db, 'users', newCsm.id), sanitizeForFirestore(newCsm));
+      await setDoc(doc(db, 'users', newUser.id), sanitizeForFirestore(newUser));
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${newCsm.id}`);
+      handleFirestoreError(err, OperationType.WRITE, `users/${newUser.id}`);
     }
 
-    // Dispatch welcome email via Nodemailer SMTP (or record locally)
-    const emailSubject = `Welcome to CyberDrill - Your CSM Account & Login Credentials`;
-    const emailText = `Hello ${newCsm.name},\n\nYour Customer Success Manager account has been activated on the CyberDrill Security Operations platform.\n\nYou can now log in using your email ID: ${newCsm.email}\n\nAssigned Title: ${newCsm.title}\nRole: CSM\n\nBest regards,\nVinisha Mendonca (Director of SecOps)`;
-    
+    // Send welcome notice email
+    const emailSubject = `Welcome to CyberDrill - Your ${data.role} Account Credentials`;
+    const emailText = `Hello ${newUser.name},\n\nYour account has been created on the CyberDrill Security Operations platform with role: ${newUser.role}.\n\nLogin Email: ${newUser.email}\nTitle: ${newUser.title}\n\nPlease contact your SecOps administrator if you have any questions.`;
+
     sendEmail({
-      to: newCsm.email,
+      to: newUser.email,
       subject: emailSubject,
       text: emailText,
       html: `
         <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 540px;">
           <h2 style="color: #0284c7;">Welcome to CyberDrill Security Operations</h2>
-          <p>Hello <strong>${newCsm.name}</strong>,</p>
-          <p>Your Customer Success Manager account has been activated.</p>
+          <p>Hello <strong>${newUser.name}</strong>,</p>
+          <p>Your account has been activated with role <strong>${newUser.role}</strong>.</p>
           <div style="background: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <p style="margin: 0 0 8px 0;"><strong>Your Login Email:</strong> ${newCsm.email}</p>
-            <p style="margin: 0 0 8px 0;"><strong>Role:</strong> Customer Success Manager (CSM)</p>
-            <p style="margin: 0;"><strong>Title:</strong> ${newCsm.title}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Login Email:</strong> ${newUser.email}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Role:</strong> ${newUser.role}</p>
+            <p style="margin: 0;"><strong>Title:</strong> ${newUser.title}</p>
           </div>
-          <p>You can now log into the portal anytime using your email ID to monitor simulations and manage client reviews.</p>
-          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #64748b;">Administrator: Vinisha Mendonca (vinisha.mendonca@progist.net)</p>
+          <p>You can now log into the portal anytime using your credentials.</p>
         </div>
       `,
     }).catch((err) => {
@@ -769,32 +854,43 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
 
     setLastSentEmail({
-      to: newCsm.email,
+      to: newUser.email,
       subject: emailSubject,
       body: emailText,
       timestamp: new Date().toLocaleTimeString(),
     });
 
-    return newCsm;
+    return newUser;
   };
 
-  const updateCsmUser = (id: string, partial: Partial<UserAccount>) => {
+  const updateUser = (id: string, partial: Partial<UserAccount>) => {
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
-          const updated = { ...u, ...partial };
-          // Persist to Firestore
+          let updatedPerms = partial.permissions !== undefined ? partial.permissions : u.permissions;
+          if (partial.role && partial.role !== u.role && partial.permissions === undefined) {
+            updatedPerms =
+              partial.role === 'Admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_CSM_PERMISSIONS;
+          }
+
+          const updated: UserAccount = {
+            ...u,
+            ...partial,
+            permissions: updatedPerms,
+          };
+
           setDoc(doc(db, 'users', id), sanitizeForFirestore(updated)).catch((err) =>
             handleFirestoreError(err, OperationType.WRITE, `users/${id}`)
           );
+
           // If name changed, update csmName in customers
           if (partial.name && partial.name !== u.name) {
             setAllCustomers((custPrev) =>
               custPrev.map((c) => {
                 if (c.csmId === id) {
                   const updatedCust = { ...c, csmName: partial.name };
-                  setDoc(doc(db, 'customers', c.id), sanitizeForFirestore(updatedCust)).catch(
-                    (err) => handleFirestoreError(err, OperationType.WRITE, `customers/${c.id}`)
+                  setDoc(doc(db, 'customers', c.id), sanitizeForFirestore(updatedCust)).catch((err) =>
+                    handleFirestoreError(err, OperationType.WRITE, `customers/${c.id}`)
                   );
                   return updatedCust;
                 }
@@ -802,6 +898,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
               })
             );
           }
+
           return updated;
         }
         return u;
@@ -809,7 +906,56 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     );
   };
 
-  const toggleCsmStatus = (id: string) => {
+  const deleteUser = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    if (!canUserManageUsers(currentUser)) {
+      return {
+        success: false,
+        error: 'Unauthorized: Admin permission required to remove team accounts.',
+      };
+    }
+    if (currentUser.id === id) {
+      return {
+        success: false,
+        error: 'Cannot delete the account you are currently logged in with.',
+      };
+    }
+
+    const targetUser = users.find((u) => u.id === id);
+    if (!targetUser) {
+      return { success: false, error: 'User account not found.' };
+    }
+
+    // Safely unassign customers currently attached to this user
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.csmId === id) {
+          const updated: Customer = {
+            ...c,
+            csmId: undefined,
+            csmName: undefined,
+            updatedAt: new Date().toISOString(),
+          };
+          setDoc(doc(db, 'customers', c.id), sanitizeForFirestore(updated)).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, `customers/${c.id}`)
+          );
+          return updated;
+        }
+        return c;
+      })
+    );
+
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+
+    try {
+      await deleteDoc(doc(db, 'users', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${id}`);
+    }
+
+    return { success: true };
+  };
+
+  const toggleUserStatus = (id: string) => {
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
@@ -826,6 +972,12 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       })
     );
   };
+
+  // Aliases for backward compatibility
+  const addCsmUser = (data: { name: string; email: string; title: string }) =>
+    addUser({ ...data, role: 'CSM' });
+  const updateCsmUser = updateUser;
+  const toggleCsmStatus = toggleUserStatus;
 
   const assignCustomerCsm = (
     customerId: string,
@@ -889,8 +1041,10 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       customerData.licenseDetails?.managedDrillFrequency
     );
 
-    const assignedCsm = customerData.csmId
-      ? users.find((u) => u.id === customerData.csmId)
+    const effectiveCsmId =
+      customerData.csmId || (currentUser.role === 'CSM' ? currentUser.id : undefined);
+    const assignedCsm = effectiveCsmId
+      ? users.find((u) => u.id === effectiveCsmId)
       : undefined;
 
     const newCustomer: Customer = {
@@ -900,7 +1054,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       contactEmail: customerData.contactEmail?.trim(),
       contactPhone: customerData.contactPhone?.trim(),
       accountOwner: customerData.accountOwner.trim(),
-      csmId: customerData.csmId || undefined,
+      csmId: effectiveCsmId || undefined,
       csmName: assignedCsm ? assignedCsm.name : undefined,
       startDate: customerData.startDate,
       endDate: customerData.endDate,
@@ -962,6 +1116,14 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const deleteCustomer = (id: string): boolean => {
+    const target = allCustomers.find((c) => c.id === id);
+    if (!target) return false;
+
+    if (!canUserDeleteCustomer(target, currentUser)) {
+      console.warn('Unauthorized: User does not have permission to delete customer account:', id);
+      return false;
+    }
+
     let found = false;
     setAllCustomers((prev) => {
       const filtered = prev.filter((c) => c.id !== id);
@@ -1590,10 +1752,19 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         getActiveSessionRemainingTime,
         logout,
         setCurrentUserId,
+        addUser,
+        updateUser,
+        deleteUser,
+        toggleUserStatus,
         addCsmUser,
         updateCsmUser,
         toggleCsmStatus,
         assignCustomerCsm,
+        hasPermission,
+        canUserCreateCustomer,
+        canUserEditCustomer,
+        canUserDeleteCustomer,
+        canUserManageUsers,
         canUserAccessCustomer,
         canUserMutateCustomer,
         addCustomer,

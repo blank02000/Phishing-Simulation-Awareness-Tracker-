@@ -1,13 +1,45 @@
 export type UserRole = 'Admin' | 'CSM';
 
+export interface UserPermissions {
+  canCreateCustomers: boolean;
+  canEditCustomers: boolean;
+  canDeleteCustomers: boolean;
+  canManageUsers: boolean;
+  canAssignCsm: boolean;
+  canManageDrills: boolean;
+  canExportReports: boolean;
+}
+
+export const DEFAULT_ADMIN_PERMISSIONS: UserPermissions = {
+  canCreateCustomers: true,
+  canEditCustomers: true,
+  canDeleteCustomers: true,
+  canManageUsers: true,
+  canAssignCsm: true,
+  canManageDrills: true,
+  canExportReports: true,
+};
+
+export const DEFAULT_CSM_PERMISSIONS: UserPermissions = {
+  canCreateCustomers: true,
+  canEditCustomers: true,
+  canDeleteCustomers: false,
+  canManageUsers: false,
+  canAssignCsm: false,
+  canManageDrills: true,
+  canExportReports: true,
+};
+
 export interface UserAccount {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: UserRole;
   title: string;
   avatarColor: string;
   status: 'Active' | 'Inactive';
+  permissions?: UserPermissions;
   createdAt: string;
 }
 

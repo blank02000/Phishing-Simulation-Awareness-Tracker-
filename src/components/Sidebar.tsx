@@ -25,8 +25,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   urgentAlertsCount = 0,
 }) => {
-  const { currentUser, logout } = useCustomerContext();
+  const { currentUser, logout, canUserManageUsers } = useCustomerContext();
   const isAdmin = currentUser.role === 'Admin';
+  const canManageUsers = isAdmin || canUserManageUsers(currentUser);
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
@@ -60,11 +61,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Reports',
       icon: <FileBarChart2 className="w-5 h-5" />,
     },
-    ...(isAdmin
+    ...(canManageUsers
       ? [
           {
             id: 'team' as NavTab,
-            label: 'CSM Team',
+            label: 'Users & RBAC',
             icon: <UserCheck className="w-5 h-5" />,
           },
         ]
