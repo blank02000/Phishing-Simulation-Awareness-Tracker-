@@ -6,6 +6,8 @@ import {
   ArrowRight,
   Lock,
   KeyRound,
+  Eye,
+  EyeOff,
   AlertCircle,
   CheckCircle2,
   Users,
@@ -27,6 +29,8 @@ export const LoginView: React.FC = () => {
   } = useCustomerContext();
 
   const [emailInput, setEmailInput] = useState(() => pendingLoginEmail || '');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,16 +46,18 @@ export const LoginView: React.FC = () => {
   useEffect(() => {
     if (pendingLoginEmail) {
       setEmailInput(pendingLoginEmail);
+      setPasswordInput(pendingLoginEmail);
     }
   }, [pendingLoginEmail]);
 
   const adminUsers = users.filter((u) => u.role === 'Admin');
   const csmUsers = users.filter((u) => u.role === 'CSM' && u.status === 'Active');
 
-  // Direct small email-based login
-  const handleDirectLogin = (e?: React.FormEvent, targetEmail?: string) => {
+  // Direct small email-and-password login
+  const handleDirectLogin = (e?: React.FormEvent, targetEmail?: string, targetPassword?: string) => {
     if (e) e.preventDefault();
     const emailToUse = targetEmail || emailInput;
+    const passwordToUse = targetPassword !== undefined ? targetPassword : passwordInput;
     setErrorMsg(null);
     setSuccessMsg(null);
 
@@ -60,9 +66,14 @@ export const LoginView: React.FC = () => {
       return;
     }
 
+    if (!passwordToUse.trim()) {
+      setErrorMsg('Please enter your password. (For now, your password is the same as your email ID).');
+      return;
+    }
+
     setIsLoading(true);
     setTimeout(() => {
-      const res = loginWithEmail(emailToUse);
+      const res = loginWithEmail(emailToUse, passwordToUse);
       setIsLoading(false);
       if (!res.success) {
         setErrorMsg(res.error || 'Authentication failed.');
@@ -248,6 +259,7 @@ export const LoginView: React.FC = () => {
                 onClick={() => {
                   setPendingLoginEmail(null);
                   setEmailInput('');
+                  setPasswordInput('');
                 }}
                 className="text-[11px] text-blue-700 hover:text-blue-900 font-bold underline shrink-0 cursor-pointer"
               >
@@ -396,6 +408,62 @@ export const LoginView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Password Input (Direct Login Mode) */}
+              {!useOtpMode && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="login-password-input"
+                      className="block text-xs font-bold text-slate-700"
+                    >
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (emailInput.trim()) {
+                          setPasswordInput(emailInput.trim());
+                          if (errorMsg) setErrorMsg(null);
+                        }
+                      }}
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer hover:underline"
+                      title="For now, sets password to match the email entered above"
+                    >
+                      Use Email as Password
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="login-password-input"
+                      type={showPassword ? 'text' : 'password'}
+                      value={passwordInput}
+                      onChange={(e) => {
+                        setPasswordInput(e.target.value);
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      placeholder="Enter your password (same as email ID)"
+                      required
+                      className="w-full pl-9.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Default rule: Your login password is currently configured as your email address.
+                  </p>
+                </div>
+              )}
+
               {useOtpMode ? (
                 <button
                   type="submit"
@@ -469,10 +537,11 @@ export const LoginView: React.FC = () => {
                   id={`btn-quick-login-${admin.id}`}
                   onClick={() => {
                     setEmailInput(admin.email);
+                    setPasswordInput(admin.email);
                     if (useOtpMode) {
                       handleRequestOtp(undefined, admin.email);
                     } else {
-                      handleDirectLogin(undefined, admin.email);
+                      handleDirectLogin(undefined, admin.email, admin.email);
                     }
                   }}
                   className="w-full p-2.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100/70 text-left flex items-center justify-between transition-all group cursor-pointer"
@@ -503,10 +572,11 @@ export const LoginView: React.FC = () => {
                   id={`btn-quick-login-${csm.id}`}
                   onClick={() => {
                     setEmailInput(csm.email);
+                    setPasswordInput(csm.email);
                     if (useOtpMode) {
                       handleRequestOtp(undefined, csm.email);
                     } else {
-                      handleDirectLogin(undefined, csm.email);
+                      handleDirectLogin(undefined, csm.email, csm.email);
                     }
                   }}
                   className="w-full p-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-100/70 text-left flex items-center justify-between transition-all group cursor-pointer"

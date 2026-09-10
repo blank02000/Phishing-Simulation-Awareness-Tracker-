@@ -51,7 +51,10 @@ interface CustomerContextType {
   authSession: AuthSession | null;
   pendingLoginEmail: string | null;
   setPendingLoginEmail: (email: string | null) => void;
-  loginWithEmail: (email: string) => { success: boolean; user?: UserAccount; error?: string };
+  loginWithEmail: (
+    email: string,
+    password?: string
+  ) => { success: boolean; user?: UserAccount; error?: string };
   sendLoginOtp: (email: string) => { success: boolean; otp?: string; expiresAt?: number; error?: string };
   verifyLoginOtp: (email: string, otp: string) => { success: boolean; user?: UserAccount; error?: string };
   getActiveSessionRemainingTime: () => { hours: number; minutes: number; isExpired: boolean; formatted: string } | null;
@@ -442,9 +445,10 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
   };
 
-  // Login via Work Email ID (Direct authentication with 7-hour session token)
+  // Login via Work Email ID and Password (Direct authentication with 7-hour session token)
   const loginWithEmail = (
-    email: string
+    email: string,
+    password?: string
   ): { success: boolean; user?: UserAccount; error?: string } => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
@@ -467,6 +471,23 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         success: false,
         error: `The account for "${email}" is currently inactive. Please contact your SecOps administrator.`,
       };
+    }
+
+    // Password Verification: For now, password is the email address itself
+    if (password !== undefined) {
+      const cleanPassword = password.trim().toLowerCase();
+      if (!cleanPassword) {
+        return {
+          success: false,
+          error: 'Please enter your password. (For now, your password is the same as your email ID).',
+        };
+      }
+      if (cleanPassword !== normalizedEmail) {
+        return {
+          success: false,
+          error: 'Incorrect password. (For now, your password is set to your email ID).',
+        };
+      }
     }
 
     // Generate active session token valid for 7 hours
