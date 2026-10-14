@@ -1,7 +1,21 @@
-import React, { useState, useMemo } from 'react';
-import { DrillType, CustomerProducts } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { DrillType, CustomerProducts, CustomField } from '../../types';
 import { generateAnnualTimeline, SYSTEM_TODAY } from '../../utils/drillCalculator';
-import { X, Calendar, Building2, User, Mail, Phone, ShieldCheck, Sparkles, Check, FileSpreadsheet } from 'lucide-react';
+import { useCustomerContext } from '../../context/CustomerContext';
+import {
+  X,
+  Calendar,
+  Building2,
+  User,
+  Mail,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  Check,
+  FileSpreadsheet,
+  Key,
+} from 'lucide-react';
+import { SectionCustomFields } from '../common/SectionCustomFields';
 
 interface CreateCustomerModalProps {
   isOpen: boolean;
@@ -11,6 +25,9 @@ interface CreateCustomerModalProps {
     customerContact: string;
     contactEmail?: string;
     contactPhone?: string;
+    cisoName?: string;
+    cisoEmail?: string;
+    cisoPhone?: string;
     accountOwner: string;
     startDate: string;
     endDate?: string;
@@ -20,6 +37,7 @@ interface CreateCustomerModalProps {
     industry?: string;
     notes?: string;
     products?: CustomerProducts;
+    customFields?: CustomField[];
     licenseDetails?: {
       productPlan?: string;
       productSubscription?: string;
@@ -57,6 +75,9 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [cisoName, setCisoName] = useState('');
+  const [cisoEmail, setCisoEmail] = useState('');
+  const [cisoPhone, setCisoPhone] = useState('');
   
   const [startDate, setStartDate] = useState(SYSTEM_TODAY);
   const [endDate, setEndDate] = useState('2027-08-31');
@@ -83,7 +104,42 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
     proPatrol: true,
   });
 
+  const { customizationSettings } = useCustomerContext();
+
   const [notes, setNotes] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCustomFields((prevFields) => {
+        const userDefinedFields = customizationSettings.fields.filter((f) => !f.isSystem && f.visible);
+        const map = new Map<string, any>();
+        prevFields.forEach((pf) => {
+          if (pf.id) map.set(pf.id, pf.value);
+          if (pf.key) map.set(pf.key, pf.value);
+        });
+
+        return userDefinedFields.map((udf) => ({
+          id: udf.id,
+          key: udf.key,
+          label: udf.label,
+          type: udf.type as any,
+          options: udf.options,
+          placeholder: udf.placeholder,
+          required: udf.required,
+          value: map.has(udf.id)
+            ? map.get(udf.id)
+            : map.has(udf.key)
+            ? map.get(udf.key)
+            : (udf.defaultValue ?? (udf.type === 'boolean' ? false : '')),
+          section: udf.section,
+          helpText: udf.helpText,
+        }));
+      });
+    } else {
+      setCustomFields([]);
+    }
+  }, [isOpen, customizationSettings.fields]);
 
   // Frequency change handler
   const handleFrequencyChange = (freq: string) => {
@@ -126,6 +182,9 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       customerContact: customerContact.trim(),
       contactEmail: contactEmail.trim() || undefined,
       contactPhone: contactPhone.trim() || undefined,
+      cisoName: cisoName.trim() || undefined,
+      cisoEmail: cisoEmail.trim() || undefined,
+      cisoPhone: cisoPhone.trim() || undefined,
       accountOwner: salesChannel.trim() || 'Direct',
       startDate,
       endDate: endDate.trim() || undefined,
@@ -135,6 +194,7 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       industry: companySector.trim() || undefined,
       notes: notes.trim() || undefined,
       products,
+      customFields: customFields.length > 0 ? customFields : undefined,
       licenseDetails: {
         productPlan: productPlan.trim(),
         productSubscription: productSubscription.trim(),
@@ -265,6 +325,72 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Customized fields directly inside Section 1 (Organization & Account) */}
+            <SectionCustomFields
+              section="accountDetails"
+              customFields={customFields}
+              onChange={setCustomFields}
+              gridColsClass="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"
+              addButtonLabel="+ Add Field to Organization & SPOC"
+            />
+
+            {/* CISO / Chief Information Security Officer Details */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                  <span>CISO Information (Executive Security Leadership)</span>
+                </div>
+                <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                  Optional
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">CISO Full Name</label>
+                  <input
+                    id="input-ciso-name"
+                    type="text"
+                    placeholder="e.g. Rajesh Nair (CISO)"
+                    value={cisoName}
+                    onChange={(e) => setCisoName(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">CISO Email</label>
+                  <input
+                    id="input-ciso-email"
+                    type="email"
+                    placeholder="ciso@company.com"
+                    value={cisoEmail}
+                    onChange={(e) => setCisoEmail(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">CISO Phone / Contact</label>
+                  <input
+                    id="input-ciso-phone"
+                    type="text"
+                    placeholder="+91 98765 43210"
+                    value={cisoPhone}
+                    onChange={(e) => setCisoPhone(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Customized fields directly inside CISO & Contacts */}
+              <SectionCustomFields
+                section="contacts"
+                customFields={customFields}
+                onChange={setCustomFields}
+                gridColsClass="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                addButtonLabel="+ Add Field to CISO Info"
+              />
+            </div>
           </div>
 
           {/* Section 2: License & Product Plan */}
@@ -393,6 +519,41 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                 <span className="font-medium text-slate-800">ProPatrol</span>
               </label>
             </div>
+
+            {/* Automatic License Provisioning Banner */}
+            {customizationSettings.licenseConfig.autoGenerateOnCustomerCreation && (
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex items-center justify-between mt-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-emerald-950">
+                      Automatic License Generation Policy Active
+                    </p>
+                    <p className="text-[11px] text-emerald-700">
+                      Saving this account will automatically issue an active master license (Prefix:{' '}
+                      <code className="font-mono font-bold bg-white px-1 py-0.2 rounded border border-emerald-200">
+                        {customizationSettings.licenseConfig.licenseKeyPrefix}
+                      </code>
+                      , Duration: {customizationSettings.licenseConfig.defaultValidityMonths} Months).
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded-md">
+                  Auto-Issued
+                </span>
+              </div>
+            )}
+
+            {/* Customized fields directly inside Section 2: License & Product Subscriptions */}
+            <SectionCustomFields
+              section="licenseInfo"
+              customFields={customFields}
+              onChange={setCustomFields}
+              gridColsClass="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3"
+              addButtonLabel="+ Add Field to License & Subscriptions"
+            />
           </div>
 
           {/* Section 3: Annual Drill Schedule & Dates */}
@@ -495,6 +656,14 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-hidden"
             />
           </div>
+
+          {/* Customized fields directly inside General Notes */}
+          <SectionCustomFields
+            section="generalNotes"
+            customFields={customFields}
+            onChange={setCustomFields}
+            addButtonLabel="+ Add Field to Notes"
+          />
 
           {/* Footer Actions */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">

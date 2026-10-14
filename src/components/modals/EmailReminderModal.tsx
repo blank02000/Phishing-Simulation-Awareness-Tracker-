@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Customer, DrillRecord, ReviewMeeting } from '../../types';
+import { Customer, DrillRecord, ReviewMeeting, CustomField } from '../../types';
 import { useCustomerContext } from '../../context/CustomerContext';
 import { sendDrillReminderEmail, sendEmail } from '../../utils/emailService';
 import { formatDisplayDate } from '../../utils/drillCalculator';
 import { Mail, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { CustomFieldsFormSection } from '../common/CustomFieldsFormSection';
 
 interface EmailReminderModalProps {
   isOpen: boolean;
@@ -24,7 +25,7 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
 }) => {
   const { currentUser } = useCustomerContext();
 
-  const [toEmail, setToEmail] = useState(customer.primaryContactEmail || '');
+  const [toEmail, setToEmail] = useState(customer.contactEmail || customer.cisoEmail || '');
   const [subject, setSubject] = useState(() => {
     if (drill) {
       return isOverdue
@@ -37,6 +38,7 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
     return `Security Awareness & Cyber Drill Notice - ${customer.name}`;
   });
   const [customNote, setCustomNote] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -52,6 +54,28 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
     setSending(true);
     setStatus(null);
 
+    const customFieldsText =
+      customFields.length > 0
+        ? '\n\n' +
+          customFields
+            .map((f) => `${f.name}: ${f.type === 'boolean' ? (f.value ? 'Yes' : 'No') : f.value}`)
+            .join('\n')
+        : '';
+
+    const customFieldsHtml =
+      customFields.length > 0
+        ? `<div style="margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px;">` +
+          customFields
+            .map(
+              (f) =>
+                `<p style="margin: 4px 0; font-size: 13px;"><strong>${f.name}:</strong> ${
+                  f.type === 'boolean' ? (f.value ? 'Yes' : 'No') : f.value
+                }</p>`
+            )
+            .join('') +
+          `</div>`
+        : '';
+
     try {
       if (drill) {
         const result = await sendDrillReminderEmail({
@@ -61,7 +85,7 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
           drillType: drill.drillType,
           dueDate: formatDisplayDate(drill.plannedDate),
           csmName: currentUser.name,
-          customNote: customNote.trim() || undefined,
+          customNote: ((customNote.trim() || '') + customFieldsText).trim() || undefined,
           isOverdue: Boolean(isOverdue),
         });
 
@@ -83,12 +107,13 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
         const result = await sendEmail({
           to: toEmail.trim(),
           subject: subject.trim(),
-          text: `Cyber Drill Notice for ${customer.name}:\n\n${customNote || 'Please review your scheduled security drills.'}\n\nAssigned CSM: ${currentUser.name}`,
+          text: `Cyber Drill Notice for ${customer.name}:\n\n${customNote || 'Please review your scheduled security drills.'}${customFieldsText}\n\nAssigned CSM: ${currentUser.name}`,
           html: `
             <div style="font-family: sans-serif; padding: 20px; color: #1e293b;">
               <h2 style="color: #0284c7;">CyberDrill Operations Notice</h2>
               <p>Hello <strong>${customer.name} Team</strong>,</p>
               <p>${customNote ? customNote.replace(/\n/g, '<br>') : 'This is a scheduled operational notice regarding your cybersecurity awareness and phishing drills.'}</p>
+              ${customFieldsHtml}
               <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
               <p style="font-size: 12px; color: #64748b;">Sender: ${currentUser.name} (${currentUser.email || 'CSM Team'})</p>
             </div>
@@ -188,11 +213,27 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
               placeholder="customer.security@example.com"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
             />
-            {customer.primaryContactName && (
-              <p className="text-[10px] text-slate-500 mt-1">
-                Primary Contact: {customer.primaryContactName}
-              </p>
-            )}
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-400">Quick fill:</span>
+              {customer.contactEmail && (
+                <button
+                  type="button"
+                  onClick={() => setToEmail(customer.contactEmail || '')}
+                  className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded border border-slate-200 transition-colors"
+                >
+                  Primary: {customer.customerContact} ({customer.contactEmail})
+                </button>
+              )}
+              {customer.cisoEmail && (
+                <button
+                  type="button"
+                  onClick={() => setToEmail(customer.cisoEmail || '')}
+                  className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded border border-blue-200 transition-colors font-medium flex items-center gap-1"
+                >
+                  CISO: {customer.cisoName || 'CISO'} ({customer.cisoEmail})
+                </button>
+              )}
+            </div>
           </div>
 
           <div>
@@ -221,6 +262,14 @@ export const EmailReminderModal: React.FC<EmailReminderModalProps> = ({
               className="w-full p-2.5 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
             />
           </div>
+
+          {/* Admin Field Builder & Email Custom Fields */}
+          <CustomFieldsFormSection
+            fields={customFields}
+            onChange={setCustomFields}
+            formTitle="Email Notice Custom Fields"
+            formType="email"
+          />
 
           <div className="pt-2 flex items-center justify-between border-t border-slate-100">
             <div className="text-[11px] text-slate-500 flex items-center gap-1">

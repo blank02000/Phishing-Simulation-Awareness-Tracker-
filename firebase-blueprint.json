@@ -67,6 +67,18 @@
           "type": "string",
           "description": "Contact phone number"
         },
+        "cisoName": {
+          "type": "string",
+          "description": "Chief Information Security Officer (CISO) name"
+        },
+        "cisoEmail": {
+          "type": "string",
+          "description": "CISO email address"
+        },
+        "cisoPhone": {
+          "type": "string",
+          "description": "CISO contact phone number"
+        },
         "accountOwner": {
           "type": "string",
           "description": "Internal account owner or sales channel"
@@ -98,7 +110,26 @@
         },
         "notes": {
           "type": "string",
-          "description": "Customer account notes"
+          "description": "Overall customer account key notes and compliance objectives"
+        },
+        "overallNotesCreatedAt": {
+          "type": "string",
+          "description": "Timestamp when overall account notes were created"
+        },
+        "overallNotesUpdatedAt": {
+          "type": "string",
+          "description": "Timestamp when overall account notes were last updated"
+        },
+        "overallNotesUpdatedBy": {
+          "type": "string",
+          "description": "Name of user who last updated overall notes"
+        },
+        "generalNotes": {
+          "type": "array",
+          "description": "Chronological general account notes log entries",
+          "items": {
+            "type": "object"
+          }
         },
         "products": {
           "type": "object",

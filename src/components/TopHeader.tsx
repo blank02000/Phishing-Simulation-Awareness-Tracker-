@@ -147,6 +147,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         {activeTab === 'team' && (
           <span className="text-slate-900 font-bold">CSM Team & Portfolio Allocation</span>
         )}
+
+        {activeTab === 'customization' && (
+          <span className="text-slate-900 font-bold">Form & Account Customization Studio</span>
+        )}
       </div>
 
       {/* Right: Role Switcher, Reference Date & Actions */}

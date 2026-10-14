@@ -15,8 +15,21 @@ import {
   UserPermissions,
   DEFAULT_ADMIN_PERMISSIONS,
   DEFAULT_CSM_PERMISSIONS,
+  CustomField,
+  GeneralNoteCategory,
+  AccountGeneralNote,
+  CustomizationSettings,
+  FormFieldCustomization,
+  NotesCustomizationConfig,
+  LicenseCustomizationConfig,
+  CustomerLicenseFile,
 } from '../types';
 import { INITIAL_USERS, INITIAL_CUSTOMERS } from '../data/seedData';
+import {
+  DEFAULT_CUSTOMIZATION_SETTINGS,
+  generateDigitalLicense,
+  calculateLicenseStatus,
+} from '../utils/customizationDefaults';
 import {
   SYSTEM_TODAY,
   generateAnnualTimeline,
@@ -70,6 +83,7 @@ interface CustomerContextType {
     title: string;
     password?: string;
     permissions?: Partial<UserPermissions>;
+    customFields?: CustomField[];
   }) => Promise<UserAccount>;
   updateUser: (id: string, partial: Partial<UserAccount>) => void;
   deleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -92,6 +106,9 @@ interface CustomerContextType {
     customerContact: string;
     contactEmail?: string;
     contactPhone?: string;
+    cisoName?: string;
+    cisoEmail?: string;
+    cisoPhone?: string;
     accountOwner: string;
     csmId?: string;
     startDate: string;
@@ -103,9 +120,33 @@ interface CustomerContextType {
     notes?: string;
     products?: CustomerProducts;
     licenseDetails?: LicenseDetails;
+    customFields?: CustomField[];
   }) => Customer;
   updateCustomer: (id: string, partial: Partial<Customer>) => boolean;
   deleteCustomer: (id: string) => boolean;
+  updateCustomerOverallNotes: (customerId: string, notes: string) => boolean;
+  addCustomerGeneralNote: (
+    customerId: string,
+    note: { content: string; category?: GeneralNoteCategory }
+  ) => boolean;
+  updateCustomerGeneralNote: (
+    customerId: string,
+    noteId: string,
+    content: string,
+    category?: GeneralNoteCategory
+  ) => boolean;
+  deleteCustomerGeneralNote: (customerId: string, noteId: string) => boolean;
+  updateDrillNotes: (
+    customerId: string,
+    year: number,
+    drillId: string,
+    notes: string,
+    meta?: {
+      summary?: string;
+      keyFindings?: string;
+      recommendations?: string;
+    }
+  ) => boolean;
   markDrillCompleted: (
     customerId: string,
     yearOrDrillId: number | string,
@@ -131,7 +172,8 @@ interface CustomerContextType {
     annualRequirement: number,
     intervalMonths: number,
     defaultDrillType?: DrillType,
-    notes?: string
+    notes?: string,
+    customFields?: CustomField[]
   ) => boolean;
   addLmsDeliverable: (
     customerId: string,
@@ -142,6 +184,7 @@ interface CustomerContextType {
       plannedDate: string;
       targetAudience?: string;
       notes?: string;
+      customFields?: CustomField[];
     }
   ) => LmsDeliverable | null;
   updateLmsDeliverable: (
@@ -163,6 +206,7 @@ interface CustomerContextType {
       actualCompletionDate: string;
       completionRate?: number;
       notes?: string;
+      customFields?: CustomField[];
     }
   ) => boolean;
   resetToDemoData: () => void;
@@ -172,6 +216,30 @@ interface CustomerContextType {
   bulkImportCustomers: (rows: any[]) => number;
   lastSentEmail: { to: string; subject: string; body: string; timestamp: string } | null;
   clearLastSentEmail: () => void;
+
+  // Customization & Dynamic Forms Engine
+  customizationSettings: CustomizationSettings;
+  updateCustomizationSettings: (partial: Partial<CustomizationSettings>) => void;
+  addFormField: (field: Omit<FormFieldCustomization, 'id' | 'order'>) => FormFieldCustomization;
+  updateFormField: (id: string, updates: Partial<FormFieldCustomization>) => void;
+  deleteFormField: (id: string) => void;
+  reorderFormField: (id: string, direction: 'up' | 'down') => void;
+  updateNotesConfig: (config: Partial<NotesCustomizationConfig>) => void;
+  updateLicenseConfig: (config: Partial<LicenseCustomizationConfig>) => void;
+  resetCustomizationToDefault: () => void;
+  canUserManageCustomization: (user?: UserAccount) => boolean;
+
+  // License Management & Expiry Tracking
+  addCustomerLicense: (
+    customerId: string,
+    license: Omit<CustomerLicenseFile, 'id' | 'uploadedAt' | 'uploadedBy'>
+  ) => boolean;
+  deleteCustomerLicense: (customerId: string, licenseId: string) => boolean;
+  renewCustomerLicense: (
+    customerId: string,
+    licenseId: string,
+    additionalMonths: number
+  ) => boolean;
 }
 
 const STORAGE_KEY = 'cyberdrill_customers_v4';
@@ -179,6 +247,7 @@ const USERS_STORAGE_KEY = 'cyberdrill_users_v4';
 const CURRENT_USER_KEY = 'cyberdrill_current_user_v4';
 const AUTH_SESSION_KEY = 'cyberdrill_auth_session_v5';
 const DATE_STORAGE_KEY = 'cyberdrill_ref_date_v4';
+const CUSTOMIZATION_STORAGE_KEY = 'cyberdrill_customization_v4';
 
 // 7 Hours Session Duration (keeps account active for six to seven hours per day)
 export const SESSION_DURATION_HOURS = 7;
@@ -331,6 +400,41 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const clearLastSentEmail = () => setLastSentEmail(null);
 
+  // Dynamic Form & Account Customization Settings
+  const [customizationSettings, setCustomizationSettings] = useState<CustomizationSettings>(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOMIZATION_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.fields && parsed.notesConfig && parsed.licenseConfig) {
+          const existingKeys = new Set(parsed.fields.map((f: any) => f.key));
+          const missingDefaults = DEFAULT_CUSTOMIZATION_SETTINGS.fields.filter(
+            (df) => !existingKeys.has(df.key)
+          );
+          return {
+            ...parsed,
+            fields: [...parsed.fields, ...missingDefaults],
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read customization settings', e);
+    }
+    return DEFAULT_CUSTOMIZATION_SETTINGS;
+  });
+
+  const persistCustomizationSettings = (newSettings: CustomizationSettings) => {
+    setCustomizationSettings(newSettings);
+    try {
+      localStorage.setItem(CUSTOMIZATION_STORAGE_KEY, JSON.stringify(newSettings));
+    } catch (e) {
+      console.warn('Failed to save customization settings', e);
+    }
+    setDoc(doc(db, 'app_config', 'customization'), sanitizeForFirestore(newSettings)).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, 'app_config/customization')
+    );
+  };
+
   // Derive currentUser object with guaranteed permissions
   const currentUser: UserAccount = useMemo(() => {
     const found = users.find((u) => u.id === currentUserId);
@@ -409,7 +513,11 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       (snapshot) => {
         const remoteCustomers: Customer[] = [];
         snapshot.forEach((docSnap) => {
-          remoteCustomers.push(docSnap.data() as Customer);
+          const c = docSnap.data() as Customer;
+          remoteCustomers.push({
+            ...c,
+            generalNotes: Array.isArray(c.generalNotes) ? c.generalNotes : [],
+          });
         });
         remoteCustomers.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         setAllCustomers(remoteCustomers);
@@ -786,6 +894,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     title: string;
     password?: string;
     permissions?: Partial<UserPermissions>;
+    customFields?: CustomField[];
   }): Promise<UserAccount> => {
     const colors = [
       'bg-emerald-600',
@@ -816,6 +925,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       },
       avatarColor: randomColor,
       status: 'Active',
+      customFields: data.customFields,
       createdAt: new Date().toISOString(),
     };
 
@@ -1018,6 +1128,9 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     customerContact: string;
     contactEmail?: string;
     contactPhone?: string;
+    cisoName?: string;
+    cisoEmail?: string;
+    cisoPhone?: string;
     accountOwner: string;
     csmId?: string;
     startDate: string;
@@ -1029,6 +1142,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     notes?: string;
     products?: CustomerProducts;
     licenseDetails?: LicenseDetails;
+    customFields?: CustomField[];
   }): Customer => {
     const newId = `cust-${Date.now()}`;
     const startYear = parseInt(customerData.startDate.substring(0, 4), 10) || 2026;
@@ -1047,12 +1161,33 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       ? users.find((u) => u.id === effectiveCsmId)
       : undefined;
 
+    let initialLicenses: CustomerLicenseFile[] = [];
+    if (customizationSettings.licenseConfig.autoGenerateOnCustomerCreation) {
+      const generated = generateDigitalLicense(
+        customerData.companyName.trim(),
+        customizationSettings.licenseConfig,
+        {
+          issueDate: customerData.startDate,
+          expiryDate: customerData.endDate,
+          planTier:
+            customerData.licenseDetails?.productPlan ||
+            customizationSettings.licenseConfig.defaultPlanTier,
+          targetSeats: customerData.licenseDetails?.targetEmployeesCount || 500,
+          uploadedBy: currentUser.name,
+        }
+      );
+      initialLicenses = [generated];
+    }
+
     const newCustomer: Customer = {
       id: newId,
       companyName: customerData.companyName.trim(),
       customerContact: customerData.customerContact.trim(),
       contactEmail: customerData.contactEmail?.trim(),
       contactPhone: customerData.contactPhone?.trim(),
+      cisoName: customerData.cisoName?.trim(),
+      cisoEmail: customerData.cisoEmail?.trim(),
+      cisoPhone: customerData.cisoPhone?.trim(),
       accountOwner: customerData.accountOwner.trim(),
       csmId: effectiveCsmId || undefined,
       csmName: assignedCsm ? assignedCsm.name : undefined,
@@ -1062,12 +1197,18 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       currentYear: startYear,
       industry: customerData.industry?.trim(),
       notes: customerData.notes?.trim(),
+      overallNotesCreatedAt: customerData.notes?.trim() ? new Date().toISOString() : undefined,
+      overallNotesUpdatedAt: customerData.notes?.trim() ? new Date().toISOString() : undefined,
+      overallNotesUpdatedBy: customerData.notes?.trim() ? currentUser.name : undefined,
+      generalNotes: [],
       products: customerData.products || {
         prophish: true,
         proLms: false,
         proPatrol: false,
       },
       licenseDetails: customerData.licenseDetails,
+      licenses: initialLicenses,
+      customFields: customerData.customFields,
       annualPlans: {
         [startYear]: {
           year: startYear,
@@ -1100,11 +1241,17 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
             const assigned = users.find((u) => u.id === partial.csmId);
             updatedCsmName = assigned ? assigned.name : undefined;
           }
+          const now = new Date().toISOString();
+          const isNotesModified = partial.notes !== undefined && partial.notes !== c.notes;
           const updated: Customer = {
             ...c,
             ...partial,
             csmName: updatedCsmName,
-            updatedAt: new Date().toISOString(),
+            overallNotesCreatedAt: isNotesModified ? (c.overallNotesCreatedAt || now) : c.overallNotesCreatedAt,
+            overallNotesUpdatedAt: isNotesModified ? now : c.overallNotesUpdatedAt,
+            overallNotesUpdatedBy: isNotesModified ? currentUser.name : c.overallNotesUpdatedBy,
+            generalNotes: partial.generalNotes || c.generalNotes || [],
+            updatedAt: now,
           };
           persistCustomer(updated);
           return updated;
@@ -1153,6 +1300,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       metrics?: any;
       notes?: string;
       campaignName?: string;
+      customFields?: CustomField[];
     };
 
     if (typeof yearOrDrillId === 'number') {
@@ -1178,17 +1326,26 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         const updatedDrills = currentPlan.drills.map((d) => {
           if (d.id !== targetDrillId) return d;
 
+          const now = new Date().toISOString();
+          const hasNewNotes = completionData.notes !== undefined && completionData.notes !== d.notes;
           const updatedDrill: DrillRecord = {
             ...d,
             actualCompletionDate: completionData.actualCompletionDate,
             overallResult: completionData.overallResult || 'Passed',
             status: 'Completed',
             notes: completionData.notes !== undefined ? completionData.notes : d.notes,
+            notesCreatedAt: hasNewNotes ? (d.notesCreatedAt || now) : d.notesCreatedAt,
+            notesUpdatedAt: hasNewNotes ? now : d.notesUpdatedAt,
+            notesCreatedBy: hasNewNotes ? (d.notesCreatedBy || currentUser.name) : d.notesCreatedBy,
             campaignName:
               completionData.campaignName !== undefined
                 ? completionData.campaignName
                 : d.campaignName,
             metrics: completionData.metrics || d.metrics,
+            customFields:
+              completionData.customFields !== undefined
+                ? completionData.customFields
+                : d.customFields,
           };
           return updatedDrill;
         });
@@ -1227,6 +1384,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       drillType?: DrillType;
       campaignName?: string;
       notes?: string;
+      customFields?: CustomField[];
     };
 
     if (typeof yearOrDrillId === 'number') {
@@ -1251,6 +1409,8 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
 
         const updatedDrills = currentPlan.drills.map((d) => {
           if (d.id !== targetDrillId) return d;
+          const now = new Date().toISOString();
+          const hasNewNotes = scheduleData.notes !== undefined && scheduleData.notes !== d.notes;
           return {
             ...d,
             ...(scheduleData.plannedDate ? { plannedDate: scheduleData.plannedDate } : {}),
@@ -1259,6 +1419,16 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
               ? { campaignName: scheduleData.campaignName }
               : {}),
             ...(scheduleData.notes !== undefined ? { notes: scheduleData.notes } : {}),
+            ...(hasNewNotes
+              ? {
+                  notesCreatedAt: d.notesCreatedAt || now,
+                  notesUpdatedAt: now,
+                  notesCreatedBy: d.notesCreatedBy || currentUser.name,
+                }
+              : {}),
+            ...(scheduleData.customFields !== undefined
+              ? { customFields: scheduleData.customFields }
+              : {}),
           };
         });
 
@@ -1365,7 +1535,8 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     annualRequirement: number,
     intervalMonths: number,
     defaultDrillType?: DrillType,
-    notes?: string
+    notes?: string,
+    customFields?: CustomField[]
   ): boolean => {
     let success = false;
     setAllCustomers((prev) =>
@@ -1389,6 +1560,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
           drills: newDrills,
           deliverables: [],
           notes,
+          customFields,
         };
 
         const updatedCust: Customer = {
@@ -1418,6 +1590,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       plannedDate: string;
       targetAudience?: string;
       notes?: string;
+      customFields?: CustomField[];
     }
   ): LmsDeliverable | null => {
     let createdDeliverable: LmsDeliverable | null = null;
@@ -1437,6 +1610,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
           status: 'Upcoming',
           targetAudience: data.targetAudience?.trim(),
           notes: data.notes?.trim(),
+          customFields: data.customFields,
         };
 
         createdDeliverable = newDel;
@@ -1550,6 +1724,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       actualCompletionDate: string;
       completionRate?: number;
       notes?: string;
+      customFields?: CustomField[];
     }
   ): boolean => {
     let success = false;
@@ -1570,6 +1745,10 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
             completionRate: completionData.completionRate,
             notes: completionData.notes !== undefined ? completionData.notes : d.notes,
             status: 'Completed',
+            customFields:
+              completionData.customFields !== undefined
+                ? completionData.customFields
+                : d.customFields,
           };
         });
 
@@ -1591,6 +1770,184 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     );
 
     return success;
+  };
+
+  const updateCustomerOverallNotes = (customerId: string, notes: string): boolean => {
+    let found = false;
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const now = new Date().toISOString();
+          const trimmedNotes = notes.trim();
+          const updated: Customer = {
+            ...c,
+            notes: trimmedNotes || undefined,
+            overallNotesCreatedAt: c.overallNotesCreatedAt || (trimmedNotes ? now : undefined),
+            overallNotesUpdatedAt: now,
+            overallNotesUpdatedBy: currentUser.name,
+            updatedAt: now,
+          };
+          persistCustomer(updated);
+          return updated;
+        }
+        return c;
+      })
+    );
+    return found;
+  };
+
+  const addCustomerGeneralNote = (
+    customerId: string,
+    note: { content: string; category?: GeneralNoteCategory }
+  ): boolean => {
+    let found = false;
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const now = new Date().toISOString();
+          const newNote: AccountGeneralNote = {
+            id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            content: note.content.trim(),
+            category: note.category || 'General',
+            createdAt: now,
+            createdBy: currentUser.name,
+            createdById: currentUser.id,
+          };
+          const updatedGeneralNotes = [newNote, ...(c.generalNotes || [])];
+          const updated: Customer = {
+            ...c,
+            generalNotes: updatedGeneralNotes,
+            updatedAt: now,
+          };
+          persistCustomer(updated);
+          return updated;
+        }
+        return c;
+      })
+    );
+    return found;
+  };
+
+  const updateCustomerGeneralNote = (
+    customerId: string,
+    noteId: string,
+    content: string,
+    category?: GeneralNoteCategory
+  ): boolean => {
+    let found = false;
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const now = new Date().toISOString();
+          const updatedGeneralNotes = (c.generalNotes || []).map((n) => {
+            if (n.id === noteId) {
+              return {
+                ...n,
+                content: content.trim(),
+                category: category || n.category,
+                updatedAt: now,
+                updatedBy: currentUser.name,
+              };
+            }
+            return n;
+          });
+          const updated: Customer = {
+            ...c,
+            generalNotes: updatedGeneralNotes,
+            updatedAt: now,
+          };
+          persistCustomer(updated);
+          return updated;
+        }
+        return c;
+      })
+    );
+    return found;
+  };
+
+  const deleteCustomerGeneralNote = (customerId: string, noteId: string): boolean => {
+    let found = false;
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const now = new Date().toISOString();
+          const updatedGeneralNotes = (c.generalNotes || []).filter((n) => n.id !== noteId);
+          const updated: Customer = {
+            ...c,
+            generalNotes: updatedGeneralNotes,
+            updatedAt: now,
+          };
+          persistCustomer(updated);
+          return updated;
+        }
+        return c;
+      })
+    );
+    return found;
+  };
+
+  const updateDrillNotes = (
+    customerId: string,
+    year: number,
+    drillId: string,
+    notes: string,
+    meta?: {
+      summary?: string;
+      keyFindings?: string;
+      recommendations?: string;
+    }
+  ): boolean => {
+    let found = false;
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id !== customerId) return c;
+        const plan = c.annualPlans[year];
+        if (!plan) return c;
+
+        const now = new Date().toISOString();
+        const trimmedNotes = notes.trim();
+        const updatedDrills = plan.drills.map((d) => {
+          if (d.id !== drillId) return d;
+          found = true;
+          const hasNewNotes = trimmedNotes !== (d.notes || '');
+          return {
+            ...d,
+            notes: trimmedNotes || undefined,
+            notesCreatedAt: d.notesCreatedAt || (trimmedNotes ? now : undefined),
+            notesUpdatedAt: hasNewNotes ? now : d.notesUpdatedAt,
+            notesCreatedBy: hasNewNotes ? currentUser.name : d.notesCreatedBy,
+            summary: meta?.summary !== undefined ? meta.summary.trim() || undefined : d.summary,
+            keyFindings:
+              meta?.keyFindings !== undefined
+                ? meta.keyFindings.trim() || undefined
+                : d.keyFindings,
+            recommendations:
+              meta?.recommendations !== undefined
+                ? meta.recommendations.trim() || undefined
+                : d.recommendations,
+          };
+        });
+
+        const updatedCust: Customer = {
+          ...c,
+          annualPlans: {
+            ...c.annualPlans,
+            [year]: {
+              ...plan,
+              drills: updatedDrills,
+            },
+          },
+          updatedAt: now,
+        };
+        persistCustomer(updatedCust);
+        return updatedCust;
+      })
+    );
+    return found;
   };
 
   const bulkImportCustomers = (rows: any[]): number => {
@@ -1621,6 +1978,9 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         customerContact: String(row.customerContact || 'Lead SecOps').trim(),
         contactEmail: row.contactEmail ? String(row.contactEmail).trim() : undefined,
         contactPhone: row.contactPhone ? String(row.contactPhone).trim() : undefined,
+        cisoName: row.cisoName || row['CISO Name'] || row.ciso ? String(row.cisoName || row['CISO Name'] || row.ciso).trim() : undefined,
+        cisoEmail: row.cisoEmail || row['CISO Email'] ? String(row.cisoEmail || row['CISO Email']).trim() : undefined,
+        cisoPhone: row.cisoPhone || row['CISO Phone'] || row['CISO Contact'] ? String(row.cisoPhone || row['CISO Phone'] || row['CISO Contact']).trim() : undefined,
         accountOwner: String(row.accountOwner || 'Direct').trim(),
         csmId: row.csmId || undefined,
         csmName: assignedCsm ? assignedCsm.name : undefined,
@@ -1630,6 +1990,10 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         currentYear: startYear,
         industry: row.industry ? String(row.industry).trim() : undefined,
         notes: row.notes ? String(row.notes).trim() : undefined,
+        overallNotesCreatedAt: row.notes ? new Date().toISOString() : undefined,
+        overallNotesUpdatedAt: row.notes ? new Date().toISOString() : undefined,
+        overallNotesUpdatedBy: row.notes ? currentUser.name : undefined,
+        generalNotes: [],
         products: {
           prophish: row.productProphish !== false,
           proLms: Boolean(row.productProLms),
@@ -1724,9 +2088,221 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
       return false;
     } catch (e) {
-      console.error('Failed to import JSON data', e);
+      console.error('Import failed:', e);
       return false;
     }
+  };
+
+  const canUserManageCustomization = (user: UserAccount = currentUser): boolean => {
+    if (user.role === 'Admin') return true;
+    return !!user.permissions?.canManageCustomization;
+  };
+
+  const updateCustomizationSettings = (partial: Partial<CustomizationSettings>) => {
+    const updated: CustomizationSettings = {
+      ...customizationSettings,
+      ...partial,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser.name,
+    };
+    persistCustomizationSettings(updated);
+  };
+
+  const addFormField = (field: Omit<FormFieldCustomization, 'id' | 'order'>): FormFieldCustomization => {
+    const existing = customizationSettings.fields.filter((f) => f.section === field.section);
+    const maxOrder = existing.reduce((max, f) => Math.max(max, f.order), 0);
+    const newField: FormFieldCustomization = {
+      ...field,
+      id: `f-custom-${field.section}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      order: maxOrder + 1,
+    };
+    const updatedFields = [...customizationSettings.fields, newField];
+    updateCustomizationSettings({ fields: updatedFields });
+    return newField;
+  };
+
+  const updateFormField = (id: string, updates: Partial<FormFieldCustomization>) => {
+    const updatedFields = customizationSettings.fields.map((f) => {
+      if (f.id === id) {
+        return { ...f, ...updates };
+      }
+      return f;
+    });
+    updateCustomizationSettings({ fields: updatedFields });
+  };
+
+  const deleteFormField = (id: string) => {
+    const target = customizationSettings.fields.find((f) => f.id === id);
+    if (!target || target.isSystem) {
+      return;
+    }
+    const updatedFields = customizationSettings.fields.filter((f) => f.id !== id);
+    updateCustomizationSettings({ fields: updatedFields });
+  };
+
+  const reorderFormField = (id: string, direction: 'up' | 'down') => {
+    const current = customizationSettings.fields.find((f) => f.id === id);
+    if (!current) return;
+    const sectionFields = customizationSettings.fields
+      .filter((f) => f.section === current.section)
+      .sort((a, b) => a.order - b.order);
+
+    const index = sectionFields.findIndex((f) => f.id === id);
+    if (direction === 'up' && index > 0) {
+      const prev = sectionFields[index - 1];
+      const curOrder = current.order;
+      current.order = prev.order;
+      prev.order = curOrder;
+    } else if (direction === 'down' && index < sectionFields.length - 1) {
+      const next = sectionFields[index + 1];
+      const curOrder = current.order;
+      current.order = next.order;
+      next.order = curOrder;
+    }
+    updateCustomizationSettings({ fields: [...customizationSettings.fields] });
+  };
+
+  const updateNotesConfig = (config: Partial<NotesCustomizationConfig>) => {
+    updateCustomizationSettings({
+      notesConfig: {
+        ...customizationSettings.notesConfig,
+        ...config,
+      },
+    });
+  };
+
+  const updateLicenseConfig = (config: Partial<LicenseCustomizationConfig>) => {
+    updateCustomizationSettings({
+      licenseConfig: {
+        ...customizationSettings.licenseConfig,
+        ...config,
+      },
+    });
+  };
+
+  const resetCustomizationToDefault = () => {
+    const fresh: CustomizationSettings = {
+      ...DEFAULT_CUSTOMIZATION_SETTINGS,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser.name,
+    };
+    persistCustomizationSettings(fresh);
+  };
+
+  const addCustomerLicense = (
+    customerId: string,
+    license: Omit<CustomerLicenseFile, 'id' | 'uploadedAt' | 'uploadedBy'>
+  ): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+    const newLicense: CustomerLicenseFile = {
+      ...license,
+      id: `lic-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      uploadedAt: now,
+      uploadedBy: currentUser.name,
+      status: calculateLicenseStatus(
+        license.expiryDate,
+        customizationSettings.licenseConfig.expiryWarningThresholdDays,
+        customizationSettings.licenseConfig.expiryCriticalThresholdDays
+      ),
+      digitalSignature:
+        license.digitalSignature ||
+        `SHA256:${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
+    };
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const currentLicenses = c.licenses || [];
+          const updatedLicenses = [newLicense, ...currentLicenses];
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            endDate:
+              license.expiryDate && (!c.endDate || license.expiryDate > c.endDate)
+                ? license.expiryDate
+                : c.endDate,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+    return found;
+  };
+
+  const deleteCustomerLicense = (customerId: string, licenseId: string): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const updatedLicenses = (c.licenses || []).filter((l) => l.id !== licenseId);
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+    return found;
+  };
+
+  const renewCustomerLicense = (
+    customerId: string,
+    licenseId: string,
+    additionalMonths: number
+  ): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          found = true;
+          const updatedLicenses = (c.licenses || []).map((l) => {
+            if (l.id === licenseId) {
+              const currentExp = new Date(l.expiryDate || c.endDate || new Date());
+              currentExp.setMonth(currentExp.getMonth() + additionalMonths);
+              const newExpiryStr = currentExp.toISOString().split('T')[0];
+              return {
+                ...l,
+                expiryDate: newExpiryStr,
+                status: calculateLicenseStatus(
+                  newExpiryStr,
+                  customizationSettings.licenseConfig.expiryWarningThresholdDays,
+                  customizationSettings.licenseConfig.expiryCriticalThresholdDays
+                ),
+                notes: `${l.notes || ''}\n[Renewed on ${now.split('T')[0]} by ${currentUser.name}: Extended +${additionalMonths} months]`.trim(),
+              };
+            }
+            return l;
+          });
+
+          const maxExpiry = updatedLicenses.reduce((max, lic) => {
+            return !max || (lic.expiryDate && lic.expiryDate > max) ? lic.expiryDate : max;
+          }, c.endDate || '');
+
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            endDate: maxExpiry || c.endDate,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+    return found;
   };
 
   return (
@@ -1770,6 +2346,11 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         addCustomer,
         updateCustomer,
         deleteCustomer,
+        updateCustomerOverallNotes,
+        addCustomerGeneralNote,
+        updateCustomerGeneralNote,
+        deleteCustomerGeneralNote,
+        updateDrillNotes,
         markDrillCompleted,
         updateDrillSchedule,
         updateReviewMeeting,
@@ -1785,6 +2366,19 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         bulkImportCustomers,
         lastSentEmail,
         clearLastSentEmail,
+        customizationSettings,
+        updateCustomizationSettings,
+        addFormField,
+        updateFormField,
+        deleteFormField,
+        reorderFormField,
+        updateNotesConfig,
+        updateLicenseConfig,
+        resetCustomizationToDefault,
+        canUserManageCustomization,
+        addCustomerLicense,
+        deleteCustomerLicense,
+        renewCustomerLicense,
       }}
     >
       {children}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Customer, LmsDeliverable } from '../../types';
+import { Customer, LmsDeliverable, CustomField } from '../../types';
 import { SYSTEM_TODAY } from '../../utils/drillCalculator';
 import { X, CheckCircle2, Calendar, Percent } from 'lucide-react';
 import { useCustomerContext } from '../../context/CustomerContext';
+import { CustomFieldsFormSection } from '../common/CustomFieldsFormSection';
 
 interface CompleteDeliverableModalProps {
   isOpen: boolean;
@@ -24,12 +25,14 @@ export const CompleteDeliverableModal: React.FC<CompleteDeliverableModalProps> =
   const [actualCompletionDate, setActualCompletionDate] = useState(SYSTEM_TODAY);
   const [completionRate, setCompletionRate] = useState<number>(100);
   const [notes, setNotes] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   useEffect(() => {
     if (deliverable) {
       setActualCompletionDate(deliverable.actualCompletionDate || SYSTEM_TODAY);
       setCompletionRate(deliverable.completionRate ?? 100);
       setNotes(deliverable.notes || '');
+      setCustomFields(deliverable.customFields ? JSON.parse(JSON.stringify(deliverable.customFields)) : []);
     }
   }, [deliverable, isOpen]);
 
@@ -41,6 +44,7 @@ export const CompleteDeliverableModal: React.FC<CompleteDeliverableModalProps> =
       actualCompletionDate,
       completionRate: Number(completionRate),
       notes,
+      customFields: customFields.length > 0 ? customFields : undefined,
     });
     onClose();
   };
@@ -117,6 +121,14 @@ export const CompleteDeliverableModal: React.FC<CompleteDeliverableModalProps> =
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 resize-none"
             />
           </div>
+
+          {/* Admin Field Builder & Deliverable Completion Custom Fields */}
+          <CustomFieldsFormSection
+            fields={customFields}
+            onChange={setCustomFields}
+            formTitle="Completion Custom Fields"
+            formType="deliverable"
+          />
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
             <button

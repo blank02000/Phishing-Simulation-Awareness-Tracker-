@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Customer, LmsDeliverable, DeliverableFrequency } from '../../types';
+import { Customer, LmsDeliverable, DeliverableFrequency, CustomField } from '../../types';
 import { SYSTEM_TODAY } from '../../utils/drillCalculator';
 import { X, BookOpen, Calendar, Users, FileText } from 'lucide-react';
 import { useCustomerContext } from '../../context/CustomerContext';
+import { CustomFieldsFormSection } from '../common/CustomFieldsFormSection';
 
 interface CreateEditDeliverableModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const CreateEditDeliverableModal: React.FC<CreateEditDeliverableModalProp
   const [plannedDate, setPlannedDate] = useState(SYSTEM_TODAY);
   const [targetAudience, setTargetAudience] = useState('All Employees');
   const [notes, setNotes] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   useEffect(() => {
     if (deliverable) {
@@ -35,12 +37,14 @@ export const CreateEditDeliverableModal: React.FC<CreateEditDeliverableModalProp
       setPlannedDate(deliverable.plannedDate);
       setTargetAudience(deliverable.targetAudience || 'All Employees');
       setNotes(deliverable.notes || '');
+      setCustomFields(deliverable.customFields ? JSON.parse(JSON.stringify(deliverable.customFields)) : []);
     } else {
       setTitle('');
       setFrequency('quarterly');
       setPlannedDate(SYSTEM_TODAY);
       setTargetAudience('All Employees');
       setNotes('');
+      setCustomFields([]);
     }
   }, [deliverable, isOpen]);
 
@@ -57,6 +61,7 @@ export const CreateEditDeliverableModal: React.FC<CreateEditDeliverableModalProp
         plannedDate,
         targetAudience,
         notes,
+        customFields: customFields.length > 0 ? customFields : undefined,
       });
     } else {
       addLmsDeliverable(customer.id, selectedYear, {
@@ -65,6 +70,7 @@ export const CreateEditDeliverableModal: React.FC<CreateEditDeliverableModalProp
         plannedDate,
         targetAudience,
         notes,
+        customFields: customFields.length > 0 ? customFields : undefined,
       });
     }
 
@@ -168,6 +174,14 @@ export const CreateEditDeliverableModal: React.FC<CreateEditDeliverableModalProp
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 resize-none"
             />
           </div>
+
+          {/* Admin Field Builder & Deliverable Custom Fields */}
+          <CustomFieldsFormSection
+            fields={customFields}
+            onChange={setCustomFields}
+            formTitle="Deliverable Custom Fields"
+            formType="deliverable"
+          />
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
             <button

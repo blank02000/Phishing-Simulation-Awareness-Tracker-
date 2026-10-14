@@ -48,6 +48,56 @@ export function formatDisplayDate(dateStr?: string): string {
 }
 
 /**
+ * Formats an ISO string or date into "Aug 15, 2026, 10:30 AM"
+ */
+export function formatDateTimeDisplay(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return formatDisplayDate(dateStr);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * Returns human-friendly relative time e.g. "Just now", "Today, 10:30 AM", "Yesterday", "3 days ago"
+ */
+export function formatRelativeTime(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return formatDisplayDate(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHours = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSec < 60) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHours < 24 && d.getDate() === now.getDate()) {
+      return `Today, ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    }
+    if (diffDays === 1 || (diffDays === 0 && d.getDate() !== now.getDate())) {
+      return `Yesterday, ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    }
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return formatDateTimeDisplay(dateStr);
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
  * Returns Month short name (e.g. "FEB", "MAY")
  */
 export function formatMonthShort(dateStr?: string): string {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Customer, DrillRecord, DrillResult } from '../../types';
+import { Customer, DrillRecord, DrillResult, CustomField } from '../../types';
 import { formatDisplayDate, SYSTEM_TODAY } from '../../utils/drillCalculator';
 import { X, CheckCircle2, Clock, ShieldAlert, Sparkles, Percent, Users, FileText } from 'lucide-react';
+import { CustomFieldsFormSection } from '../common/CustomFieldsFormSection';
 
 interface CompleteDrillModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ interface CompleteDrillModalProps {
     keyFindings?: string;
     recommendations?: string;
     notes?: string;
+    customFields?: CustomField[];
   }) => void;
   onSave?: (data: {
     actualCompletionDate: string;
@@ -35,6 +37,7 @@ interface CompleteDrillModalProps {
     keyFindings?: string;
     recommendations?: string;
     notes?: string;
+    customFields?: CustomField[];
   }) => void;
 }
 
@@ -60,6 +63,7 @@ export const CompleteDrillModal: React.FC<CompleteDrillModalProps> = ({
   const [keyFindings, setKeyFindings] = useState('');
   const [recommendations, setRecommendations] = useState('');
   const [notes, setNotes] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   useEffect(() => {
     if (drill) {
@@ -74,6 +78,7 @@ export const CompleteDrillModal: React.FC<CompleteDrillModalProps> = ({
       setKeyFindings(drill.keyFindings || '');
       setRecommendations(drill.recommendations || '');
       setNotes(drill.notes || '');
+      setCustomFields(drill.customFields ? JSON.parse(JSON.stringify(drill.customFields)) : []);
     }
   }, [drill, referenceDate]);
 
@@ -98,6 +103,7 @@ export const CompleteDrillModal: React.FC<CompleteDrillModalProps> = ({
       keyFindings: keyFindings.trim() || undefined,
       recommendations: recommendations.trim() || undefined,
       notes: notes.trim() || undefined,
+      customFields: customFields.length > 0 ? customFields : undefined,
     };
 
     const handler = onSubmit || onSave;
@@ -337,6 +343,36 @@ export const CompleteDrillModal: React.FC<CompleteDrillModalProps> = ({
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                 />
               </div>
+
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Drill Operational Notes</label>
+                  {drill?.notesCreatedAt ? (
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Date Created: <strong className="text-slate-700">{formatDisplayDate(drill.notesCreatedAt)}</strong>
+                      {drill.notesCreatedBy && ` by ${drill.notesCreatedBy}`}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">Date created will be stamped on save</span>
+                  )}
+                </div>
+                <textarea
+                  id="textarea-drill-completion-notes"
+                  rows={2}
+                  placeholder="Specific internal notes, observations, or anomalies recorded during this drill..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                />
+              </div>
+
+              {/* Dynamic Custom Fields Section with Admin Add Field Button */}
+              <CustomFieldsFormSection
+                fields={customFields}
+                onChange={setCustomFields}
+                formTitle="Drill Execution Custom Fields"
+                formType="drill"
+              />
             </div>
           </div>
 

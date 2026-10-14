@@ -20,7 +20,10 @@ import {
   UserCheck,
   FileSpreadsheet,
   Edit3,
+  Sliders,
+  Key,
 } from 'lucide-react';
+import { getDaysUntilExpiry } from '../utils/customizationDefaults';
 
 interface CustomerListViewProps {
   onSelectCustomer: (customerId: string) => void;
@@ -28,6 +31,7 @@ interface CustomerListViewProps {
   onOpenBulkUpload?: () => void;
   onMarkDrillComplete: (customer: Customer, drill: DrillRecord) => void;
   onOpenEditCustomer?: (customer: Customer, initialTab?: 'profile' | 'dates' | 'drills') => void;
+  onOpenCustomization?: () => void;
 }
 
 export const CustomerListView: React.FC<CustomerListViewProps> = ({
@@ -36,6 +40,7 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
   onOpenBulkUpload,
   onMarkDrillComplete,
   onOpenEditCustomer,
+  onOpenCustomization,
 }) => {
   const {
     customers,
@@ -45,10 +50,12 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
     dueSoonDays,
     assignCustomerCsm,
     canUserCreateCustomer,
+    canUserManageCustomization,
   } = useCustomerContext();
 
   const isAdmin = currentUser.role === 'Admin';
   const canCreateCustomer = isAdmin || canUserCreateCustomer(currentUser);
+  const canCustomize = isAdmin || canUserManageCustomization(currentUser);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -69,7 +76,9 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
         cust.customerContact.toLowerCase().includes(query) ||
         cust.accountOwner.toLowerCase().includes(query) ||
         (cust.csmName && cust.csmName.toLowerCase().includes(query)) ||
-        (cust.industry && cust.industry.toLowerCase().includes(query));
+        (cust.industry && cust.industry.toLowerCase().includes(query)) ||
+        (cust.cisoName && cust.cisoName.toLowerCase().includes(query)) ||
+        (cust.cisoEmail && cust.cisoEmail.toLowerCase().includes(query));
 
       if (!matchSearch) return false;
 
@@ -116,7 +125,18 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
         </div>
 
         {(canCreateCustomer || isAdmin) && (
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {onOpenCustomization && canCustomize && (
+              <button
+                id="btn-open-customization"
+                type="button"
+                onClick={onOpenCustomization}
+                className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                title="Configure form fields and account customization policies"
+              >
+                <Sliders className="w-4 h-4 text-indigo-600" /> Form Customization
+              </button>
+            )}
             {isAdmin && (
               <button
                 id="btn-bulk-upload-customers"
@@ -255,8 +275,18 @@ export const CustomerListView: React.FC<CustomerListViewProps> = ({
                         <div className="font-semibold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">
                           {customer.companyName}
                         </div>
-                        <div className="text-slate-500 text-[11px] mt-0.5">
-                          {customer.customerContact} • Lead: <span className="font-medium text-slate-700">{customer.accountOwner}</span>
+                        <div className="text-slate-500 text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <span>{customer.customerContact}</span>
+                          <span className="text-slate-300">•</span>
+                          <span>Lead: <span className="font-medium text-slate-700">{customer.accountOwner}</span></span>
+                          {customer.cisoName && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100 font-medium">
+                                CISO: {customer.cisoName}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </td>
 

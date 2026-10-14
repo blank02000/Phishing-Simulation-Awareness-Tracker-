@@ -16,6 +16,7 @@ import { RemindersView } from './components/RemindersView';
 import { AnnualReportView } from './components/AnnualReportView';
 import { ReviewsView } from './components/ReviewsView';
 import { CsmManagementView } from './components/CsmManagementView';
+import { CustomizationView } from './components/CustomizationView';
 
 import { CreateCustomerModal } from './components/modals/CreateCustomerModal';
 import { EditCustomerModal } from './components/modals/EditCustomerModal';
@@ -296,6 +297,7 @@ function MainApp() {
                     onOpenBulkUpload={() => setIsBulkUploadOpen(true)}
                     onMarkDrillComplete={handleOpenCompleteDrill}
                     onOpenEditCustomer={handleOpenEditCustomer}
+                    onOpenCustomization={() => setActiveTab('customization')}
                   />
                 )}
 
@@ -332,6 +334,10 @@ function MainApp() {
                   <CsmManagementView
                     onSelectCustomer={handleSelectCustomer}
                   />
+                )}
+
+                {activeTab === 'customization' && (
+                  <CustomizationView />
                 )}
               </>
             )}
@@ -409,7 +415,7 @@ function MainApp() {
         onClose={() => setNewYearPlanState({ isOpen: false, customer: null, currentYear: 2026 })}
         customer={newYearPlanState.customer}
         currentYear={newYearPlanState.currentYear}
-        onSubmit={(year, startDate, annualRequirement, intervalMonths, defaultDrillType, notes) => {
+        onSubmit={(year, startDate, annualRequirement, intervalMonths, defaultDrillType, notes, customFields) => {
           if (newYearPlanState.customer) {
             createNewYearPlan(
               newYearPlanState.customer.id,
@@ -418,7 +424,8 @@ function MainApp() {
               annualRequirement,
               intervalMonths,
               defaultDrillType,
-              notes
+              notes,
+              customFields
             );
           }
         }}

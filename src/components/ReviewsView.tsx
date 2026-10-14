@@ -7,6 +7,7 @@ import {
   DrillStatusBadge,
   DrillResultBadge,
 } from './common/StatusBadges';
+import { CustomFieldsDisplay } from './common/CustomFieldsDisplay';
 import {
   MessageSquare,
   Search,
@@ -711,7 +712,17 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
                     </div>
                   )}
 
-                  {!hasNotes && (
+                  {/* Review Meeting Custom Fields */}
+                  {item.reviewMeeting?.customFields && item.reviewMeeting.customFields.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                        Custom Meeting Fields
+                      </div>
+                      <CustomFieldsDisplay fields={item.reviewMeeting.customFields} />
+                    </div>
+                  )}
+
+                  {!hasNotes && !item.reviewMeeting?.customFields?.length && (
                     <div className="py-4 text-center text-xs text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
                       No meeting minutes or notes documented yet for this drill debrief.
                     </div>

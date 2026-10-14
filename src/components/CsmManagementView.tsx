@@ -6,8 +6,12 @@ import {
   UserPermissions,
   DEFAULT_ADMIN_PERMISSIONS,
   DEFAULT_CSM_PERMISSIONS,
+  CustomField,
+  CustomFieldType,
 } from '../types';
 import { calculateCustomerCompliance } from '../utils/drillCalculator';
+import { SectionCustomFields } from './common/SectionCustomFields';
+import { CustomFieldsDisplay } from './common/CustomFieldsDisplay';
 import {
   UserCheck,
   UserPlus,
@@ -51,6 +55,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
     logout,
     referenceDate,
     dueSoonDays,
+    customizationSettings,
   } = useCustomerContext();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,6 +73,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
     role: UserRole;
     password?: string;
     permissions: UserPermissions;
+    customFields?: CustomField[];
   }>({
     name: '',
     email: '',
@@ -75,6 +81,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
     role: 'CSM',
     password: '',
     permissions: { ...DEFAULT_CSM_PERMISSIONS },
+    customFields: [],
   });
 
   const csmUsers = users.filter((u) => u.role === 'CSM');
@@ -129,6 +136,22 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
   };
 
   const handleOpenAdd = () => {
+    const userProfileSchemaFields = (customizationSettings?.fields || []).filter(
+      (f) => f.section === 'userProfile' && !f.isSystem && f.visible
+    );
+    const initialCustomFields: CustomField[] = userProfileSchemaFields.map((f) => ({
+      id: f.id,
+      key: f.key,
+      label: f.label,
+      type: f.type as CustomFieldType,
+      options: f.options,
+      placeholder: f.placeholder,
+      required: f.required,
+      value: f.defaultValue ?? (f.type === 'boolean' ? false : ''),
+      section: 'userProfile',
+      helpText: f.helpText,
+    }));
+
     setFormData({
       name: '',
       email: '',
@@ -136,12 +159,46 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
       role: 'CSM',
       password: '',
       permissions: { ...DEFAULT_CSM_PERMISSIONS },
+      customFields: initialCustomFields,
     });
     setIsAddModalOpen(true);
   };
 
   const handleOpenEdit = (user: UserAccount) => {
     setEditingUser(user);
+    const existing = user.customFields ? JSON.parse(JSON.stringify(user.customFields)) : [];
+    const userProfileSchemaFields = (customizationSettings?.fields || []).filter(
+      (f) => f.section === 'userProfile' && !f.isSystem && f.visible
+    );
+    const map = new Map<string, any>();
+    existing.forEach((ef: CustomField) => {
+      if (ef.id) map.set(ef.id, ef.value);
+      if (ef.key) map.set(ef.key, ef.value);
+    });
+
+    const merged: CustomField[] = userProfileSchemaFields.map((f) => ({
+      id: f.id,
+      key: f.key,
+      label: f.label,
+      type: f.type as CustomFieldType,
+      options: f.options,
+      placeholder: f.placeholder,
+      required: f.required,
+      value: map.has(f.id)
+        ? map.get(f.id)
+        : map.has(f.key)
+        ? map.get(f.key)
+        : (f.defaultValue ?? (f.type === 'boolean' ? false : '')),
+      section: 'userProfile',
+      helpText: f.helpText,
+    }));
+
+    existing.forEach((ef: CustomField) => {
+      if (!merged.some((m) => (m.id && m.id === ef.id) || m.key === ef.key)) {
+        merged.push(ef);
+      }
+    });
+
     setFormData({
       name: user.name,
       email: user.email,
@@ -152,6 +209,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
         ...(user.role === 'Admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_CSM_PERMISSIONS),
         ...(user.permissions || {}),
       },
+      customFields: merged,
     });
   };
 
@@ -184,6 +242,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
         title: formData.title.trim(),
         role: formData.role,
         permissions: formData.permissions,
+        customFields: formData.customFields && formData.customFields.length > 0 ? formData.customFields : [],
         ...(formData.password?.trim() ? { password: formData.password.trim() } : {}),
       });
       setEditingUser(null);
@@ -195,6 +254,7 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
         role: formData.role,
         password: formData.password?.trim() || undefined,
         permissions: formData.permissions,
+        customFields: formData.customFields && formData.customFields.length > 0 ? formData.customFields : [],
       });
       setIsAddModalOpen(false);
     }
@@ -550,6 +610,13 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Display custom fields if any */}
+                {user.customFields && user.customFields.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-slate-100">
+                    <CustomFieldsDisplay fields={user.customFields} />
+                  </div>
+                )}
               </div>
 
               {/* Card Footer Actions */}
@@ -731,6 +798,15 @@ export const CsmManagementView: React.FC<CsmManagementViewProps> = ({
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                 />
               </div>
+
+              {/* Customized fields directly inside User Profile form */}
+              <SectionCustomFields
+                section="userProfile"
+                customFields={formData.customFields || []}
+                onChange={(fields) => setFormData({ ...formData, customFields: fields })}
+                gridColsClass="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                addButtonLabel="+ Add Field to User Profile"
+              />
 
               {/* Custom Initial Password (Optional) */}
               <div>

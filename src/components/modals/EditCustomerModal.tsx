@@ -6,6 +6,7 @@ import {
   DrillType,
   DrillStatus,
   AnnualPlan,
+  CustomField,
 } from '../../types';
 import {
   X,
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useCustomerContext } from '../../context/CustomerContext';
 import { formatDisplayDate, formatSimulationMonthWindow } from '../../utils/drillCalculator';
+import { SectionCustomFields } from '../common/SectionCustomFields';
 
 interface EditCustomerModalProps {
   isOpen: boolean;
@@ -62,7 +64,7 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   customer,
   initialTab = 'profile',
 }) => {
-  const { updateCustomer, users, currentUser } = useCustomerContext();
+  const { updateCustomer, users, currentUser, customizationSettings } = useCustomerContext();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'dates' | 'drills'>(initialTab);
 
@@ -71,11 +73,15 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [cisoName, setCisoName] = useState('');
+  const [cisoEmail, setCisoEmail] = useState('');
+  const [cisoPhone, setCisoPhone] = useState('');
   const [industry, setIndustry] = useState('');
   const [accountOwner, setAccountOwner] = useState('');
   const [csmId, setCsmId] = useState('');
   const [status, setStatus] = useState<CustomerStatus>('Active');
   const [notes, setNotes] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   // Dates & License Fields
   const [startDate, setStartDate] = useState('');
@@ -108,16 +114,54 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   const csmUsers = users.filter((u) => u.role === 'CSM');
 
   useEffect(() => {
-    if (customer) {
+    if (customer && isOpen) {
       setCompanyName(customer.companyName || '');
       setCustomerContact(customer.customerContact || '');
       setContactEmail(customer.contactEmail || '');
       setContactPhone(customer.contactPhone || '');
+      setCisoName(customer.cisoName || '');
+      setCisoEmail(customer.cisoEmail || '');
+      setCisoPhone(customer.cisoPhone || '');
       setIndustry(customer.industry || '');
       setAccountOwner(customer.accountOwner || '');
       setCsmId(customer.csmId || '');
       setStatus(customer.status || 'Active');
       setNotes(customer.notes || '');
+
+      const existingFields: CustomField[] = customer.customFields ? JSON.parse(JSON.stringify(customer.customFields)) : [];
+      const userDefinedFields = (customizationSettings?.fields || []).filter((f) => !f.isSystem && f.visible);
+      
+      const map = new Map<string, any>();
+      existingFields.forEach((ef) => {
+        if (ef.id) map.set(ef.id, ef.value);
+        if (ef.key) map.set(ef.key, ef.value);
+      });
+
+      const mergedFields: CustomField[] = userDefinedFields.map((udf) => ({
+        id: udf.id,
+        key: udf.key,
+        label: udf.label,
+        type: udf.type as any,
+        options: udf.options,
+        placeholder: udf.placeholder,
+        required: udf.required,
+        value: map.has(udf.id)
+          ? map.get(udf.id)
+          : map.has(udf.key)
+          ? map.get(udf.key)
+          : (udf.defaultValue ?? (udf.type === 'boolean' ? false : '')),
+        section: udf.section,
+        helpText: udf.helpText,
+      }));
+
+      // Preserve any custom fields that were on the customer record not in schema
+      existingFields.forEach((ef) => {
+        if (!mergedFields.some((mf) => (mf.id && mf.id === ef.id) || mf.key === ef.key)) {
+          mergedFields.push(ef);
+        }
+      });
+
+      setCustomFields(mergedFields);
 
       setStartDate(customer.startDate || '');
       setEndDate(customer.endDate || '');
@@ -146,7 +190,45 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
         setDrillsList([]);
       }
     }
-  }, [customer, isOpen]);
+  }, [customer?.id, isOpen]);
+
+  // Synchronize customFields schema changes (e.g. inline field additions) without overwriting active user edits
+  useEffect(() => {
+    if (!isOpen) return;
+    setCustomFields((prevFields) => {
+      const userDefinedFields = (customizationSettings?.fields || []).filter((f) => !f.isSystem && f.visible);
+      const map = new Map<string, any>();
+      prevFields.forEach((pf) => {
+        if (pf.id) map.set(pf.id, pf.value);
+        if (pf.key) map.set(pf.key, pf.value);
+      });
+
+      const mergedFields: CustomField[] = userDefinedFields.map((udf) => ({
+        id: udf.id,
+        key: udf.key,
+        label: udf.label,
+        type: udf.type as any,
+        options: udf.options,
+        placeholder: udf.placeholder,
+        required: udf.required,
+        value: map.has(udf.id)
+          ? map.get(udf.id)
+          : map.has(udf.key)
+          ? map.get(udf.key)
+          : (udf.defaultValue ?? (udf.type === 'boolean' ? false : '')),
+        section: udf.section,
+        helpText: udf.helpText,
+      }));
+
+      prevFields.forEach((pf) => {
+        if (!mergedFields.some((mf) => (mf.id && mf.id === pf.id) || mf.key === pf.key)) {
+          mergedFields.push(pf);
+        }
+      });
+
+      return mergedFields;
+    });
+  }, [customizationSettings?.fields, isOpen]);
 
   // When selected plan year changes, update drills list from customer annualPlans
   const handleYearChange = (year: number) => {
@@ -235,6 +317,9 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
       customerContact: customerContact.trim(),
       contactEmail: contactEmail.trim() || undefined,
       contactPhone: contactPhone.trim() || undefined,
+      cisoName: cisoName.trim() || undefined,
+      cisoEmail: cisoEmail.trim() || undefined,
+      cisoPhone: cisoPhone.trim() || undefined,
       industry: industry.trim() || undefined,
       accountOwner: accountOwner.trim() || undefined,
       csmId: csmId || undefined,
@@ -243,6 +328,7 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
       startDate: startDate,
       endDate: endDate || undefined,
       notes: notes.trim() || undefined,
+      customFields: customFields.length > 0 ? customFields : [],
       products: products,
       licenseDetails: {
         ...(customer.licenseDetails || {}),
@@ -406,6 +492,86 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
                 </div>
               </div>
 
+              {/* Customized fields directly inside Organization & Account */}
+              <SectionCustomFields
+                section="accountDetails"
+                customFields={customFields}
+                onChange={setCustomFields}
+                addButtonLabel="+ Add Field to Organization"
+              />
+
+              {/* CISO / Chief Information Security Officer Info Boxes */}
+              <div className="p-4 rounded-xl bg-slate-50/90 border border-slate-200/90 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                        CISO Information
+                      </span>
+                      <span className="ml-2 text-[11px] text-slate-500 font-medium">
+                        (Chief Information Security Officer / Security Head)
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                    Executive Security Leadership
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      CISO Name
+                    </label>
+                    <input
+                      type="text"
+                      value={cisoName}
+                      onChange={(e) => setCisoName(e.target.value)}
+                      placeholder="e.g. Rajesh Nair (CISO)"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      CISO Email
+                    </label>
+                    <input
+                      type="email"
+                      value={cisoEmail}
+                      onChange={(e) => setCisoEmail(e.target.value)}
+                      placeholder="ciso@company.com"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      CISO Phone / Direct Line
+                    </label>
+                    <input
+                      type="text"
+                      value={cisoPhone}
+                      onChange={(e) => setCisoPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Customized fields directly inside CISO & Contacts */}
+                <SectionCustomFields
+                  section="contacts"
+                  customFields={customFields}
+                  onChange={setCustomFields}
+                  gridColsClass="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                  addButtonLabel="+ Add Field to CISO Info"
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
@@ -464,6 +630,14 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden bg-white"
                 />
               </div>
+
+              {/* Customized fields directly inside General Notes */}
+              <SectionCustomFields
+                section="generalNotes"
+                customFields={customFields}
+                onChange={setCustomFields}
+                addButtonLabel="+ Add Field to Notes"
+              />
             </div>
           )}
 
@@ -605,6 +779,17 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
                       <div className="text-[10px] text-slate-500">Outlook & Gmail Plugin</div>
                     </div>
                   </label>
+                </div>
+
+                {/* Customized fields directly inside License & Dates Specs */}
+                <div className="pt-3">
+                  <SectionCustomFields
+                    section="licenseInfo"
+                    customFields={customFields}
+                    onChange={setCustomFields}
+                    gridColsClass="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                    addButtonLabel="+ Add Field to License Specs"
+                  />
                 </div>
               </div>
             </div>

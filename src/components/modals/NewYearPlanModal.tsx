@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Customer, DrillType } from '../../types';
+import { Customer, DrillType, CustomField } from '../../types';
 import { generateAnnualTimeline, formatDisplayDate, formatMonthShort } from '../../utils/drillCalculator';
 import { X, CalendarPlus, Sparkles, Check } from 'lucide-react';
+import { CustomFieldsFormSection } from '../common/CustomFieldsFormSection';
 
 interface NewYearPlanModalProps {
   isOpen: boolean;
@@ -14,7 +15,8 @@ interface NewYearPlanModalProps {
     annualRequirement: number,
     intervalMonths: number,
     defaultDrillType?: DrillType,
-    notes?: string
+    notes?: string,
+    customFields?: CustomField[]
   ) => void;
   onSave?: (
     newYear: number,
@@ -22,7 +24,8 @@ interface NewYearPlanModalProps {
     annualRequirement: number,
     intervalMonths: number,
     defaultDrillType?: DrillType,
-    notes?: string
+    notes?: string,
+    customFields?: CustomField[]
   ) => void;
 }
 
@@ -52,6 +55,7 @@ export const NewYearPlanModal: React.FC<NewYearPlanModalProps> = ({
   const [intervalMonths, setIntervalMonths] = useState<number>(3);
   const [defaultDrillType, setDefaultDrillType] = useState<DrillType>('Phishing Email Simulation');
   const [notes, setNotes] = useState<string>('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
   const previewDrills = useMemo(() => {
     if (!startDate) return [];
@@ -78,7 +82,8 @@ export const NewYearPlanModal: React.FC<NewYearPlanModalProps> = ({
         annualRequirement,
         intervalMonths,
         defaultDrillType,
-        notes.trim() || undefined
+        notes.trim() || undefined,
+        customFields.length > 0 ? customFields : undefined
       );
     }
 
@@ -208,6 +213,14 @@ export const NewYearPlanModal: React.FC<NewYearPlanModalProps> = ({
               ))}
             </select>
           </div>
+
+          {/* Admin Field Builder & Plan Custom Fields */}
+          <CustomFieldsFormSection
+            fields={customFields}
+            onChange={setCustomFields}
+            formTitle="Year Plan Custom Fields"
+            formType="annual_plan"
+          />
 
           {/* Generated Schedule Preview */}
           <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">

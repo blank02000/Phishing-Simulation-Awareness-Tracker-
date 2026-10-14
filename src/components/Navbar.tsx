@@ -12,6 +12,7 @@ import {
   Clock,
   RotateCcw,
   MessageSquare,
+  Sliders,
 } from 'lucide-react';
 
 export type NavTab =
@@ -21,7 +22,8 @@ export type NavTab =
   | 'reminders'
   | 'reports'
   | 'reviews'
-  | 'team';
+  | 'team'
+  | 'customization';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -34,12 +36,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   onOpenCreateCustomer,
 }) => {
-  const { customers, referenceDate, setReferenceDate, dueSoonDays, setSelectedCustomerId } =
-    useCustomerContext();
+  const {
+    customers,
+    referenceDate,
+    setReferenceDate,
+    dueSoonDays,
+    setSelectedCustomerId,
+    currentUser,
+    canUserManageCustomization,
+  } = useCustomerContext();
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const reminders = generateReminders(customers, referenceDate, dueSoonDays);
   const urgentCount = reminders.filter((r) => r.severity === 'high' || r.severity === 'medium').length;
+  const canCustomize = currentUser.role === 'Admin' || canUserManageCustomization(currentUser);
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -53,6 +63,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       badge: urgentCount > 0 ? urgentCount : undefined,
     },
     { id: 'reports', label: 'Reports & Digests', icon: <FileBarChart2 className="w-4 h-4" /> },
+    ...(canCustomize
+      ? [{ id: 'customization' as NavTab, label: 'Customize', icon: <Sliders className="w-4 h-4" /> }]
+      : []),
   ];
 
   return (

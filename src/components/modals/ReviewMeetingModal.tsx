@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Customer, DrillRecord, ReviewMeeting, ReviewMeetingStatus } from '../../types';
+import { Customer, DrillRecord, ReviewMeeting, ReviewMeetingStatus, CustomField } from '../../types';
 import { formatDisplayDate, SYSTEM_TODAY } from '../../utils/drillCalculator';
 import { X, Calendar, CheckCircle2, MessageSquare, Check, ShieldCheck } from 'lucide-react';
 import { useCustomerContext } from '../../context/CustomerContext';
+import { CustomFieldsFormSection } from '../common/CustomFieldsFormSection';
 
 interface ReviewMeetingModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export const ReviewMeetingModal: React.FC<ReviewMeetingModalProps> = ({
   const [findings, setFindings] = useState('');
   const [actionItems, setActionItems] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [meetingProducts, setMeetingProducts] = useState({
     prophish: true,
     proLms: true,
@@ -59,6 +61,7 @@ export const ReviewMeetingModal: React.FC<ReviewMeetingModalProps> = ({
       setFindings(drill.reviewMeeting.findings || '');
       setActionItems(drill.reviewMeeting.actionItems || '');
       setNextFollowUpDate(drill.reviewMeeting.nextFollowUpDate || '');
+      setCustomFields(drill.reviewMeeting.customFields ? JSON.parse(JSON.stringify(drill.reviewMeeting.customFields)) : []);
     } else if (drill) {
       setRequired(true);
       setDate(drill.actualCompletionDate || drill.plannedDate);
@@ -68,6 +71,7 @@ export const ReviewMeetingModal: React.FC<ReviewMeetingModalProps> = ({
       setFindings('');
       setActionItems('');
       setNextFollowUpDate('');
+      setCustomFields([]);
     }
   }, [drill]);
 
@@ -89,6 +93,7 @@ export const ReviewMeetingModal: React.FC<ReviewMeetingModalProps> = ({
       findings: findings.trim() || undefined,
       actionItems: actionItems.trim() || undefined,
       nextFollowUpDate: nextFollowUpDate || undefined,
+      customFields: customFields.length > 0 ? customFields : undefined,
     };
 
     const handler = onSubmit || onSave;
@@ -300,6 +305,14 @@ export const ReviewMeetingModal: React.FC<ReviewMeetingModalProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Admin Field Builder & Review Meeting Custom Fields */}
+              <CustomFieldsFormSection
+                fields={customFields}
+                onChange={setCustomFields}
+                formTitle="Review Meeting Custom Fields"
+                formType="meeting"
+              />
             </>
           )}
 

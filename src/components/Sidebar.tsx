@@ -12,6 +12,7 @@ import {
   Sparkles,
   MessageSquare,
   LogOut,
+  Sliders,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,9 +26,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   urgentAlertsCount = 0,
 }) => {
-  const { currentUser, logout, canUserManageUsers } = useCustomerContext();
+  const { currentUser, logout, canUserManageUsers, canUserManageCustomization } = useCustomerContext();
   const isAdmin = currentUser.role === 'Admin';
   const canManageUsers = isAdmin || canUserManageUsers(currentUser);
+  const canCustomize = isAdmin || canUserManageCustomization(currentUser);
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
@@ -67,6 +69,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             id: 'team' as NavTab,
             label: 'Users & RBAC',
             icon: <UserCheck className="w-5 h-5" />,
+          },
+        ]
+      : []),
+    ...(canCustomize
+      ? [
+          {
+            id: 'customization' as NavTab,
+            label: 'Customize',
+            icon: <Sliders className="w-5 h-5" />,
           },
         ]
       : []),

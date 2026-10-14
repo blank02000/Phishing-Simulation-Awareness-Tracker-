@@ -240,6 +240,9 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClos
         'SPOC Name': 'Rahul Sharma',
         'SPOC Contact': '9876543210',
         'SPOC Email': 'rahul@acme.com',
+        'CISO Name': 'Dr. Rajesh Nair (CISO)',
+        'CISO Contact': '+91 98765 00000',
+        'CISO Email': 'ciso@acme.com',
         'Products': 'ProPhish, ProLMS',
       },
     ];
@@ -282,6 +285,9 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClos
       'SPOC Name': r.spocName,
       'SPOC Contact': r.spocContact,
       'SPOC Email': r.spocEmail,
+      'CISO Name': r.rawRow['CISO Name'] || r.rawRow.cisoName || r.rawRow.ciso,
+      'CISO Contact': r.rawRow['CISO Contact'] || r.rawRow['CISO Phone'] || r.rawRow.cisoPhone,
+      'CISO Email': r.rawRow['CISO Email'] || r.rawRow.cisoEmail,
       'Drill Types': r.drillTypes,
       'Products': r.products,
     }));
