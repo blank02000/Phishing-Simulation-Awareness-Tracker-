@@ -16,7 +16,9 @@ import {
   Building2,
   LogOut,
   Mail,
+  BookOpen,
 } from 'lucide-react';
+import { PlatformAuditModal } from './modals/PlatformAuditModal';
 
 interface TopHeaderProps {
   activeTab: NavTab;
@@ -44,6 +46,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
   const [sessionRemaining, setSessionRemaining] = useState(() => getActiveSessionRemainingTime());
 
   // Update session remaining display every 15s
@@ -383,7 +386,26 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </div>
           )}
         </div>
+
+        {/* Platform Capabilities & Audit Matrix Trigger */}
+        <button
+          type="button"
+          id="btn-platform-audit"
+          onClick={() => setShowAuditModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/90 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-all shadow-2xs"
+          title="Inspect live platform audit, user permissions matrix, and all 10 module capabilities"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+          <span className="hidden sm:inline">Platform Guide & Audit</span>
+        </button>
       </div>
+
+      {/* Platform Capabilities & Audit Modal */}
+      <PlatformAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        onNavigateTab={setActiveTab}
+      />
     </header>
   );
 };
