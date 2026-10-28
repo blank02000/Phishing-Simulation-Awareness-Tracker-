@@ -429,7 +429,7 @@ export const DEFAULT_LICENSE_CONFIG: LicenseCustomizationConfig = {
   defaultPlanTier: 'Enterprise Cyber Suite',
   expiryWarningThresholdDays: 60,
   expiryCriticalThresholdDays: 30,
-  allowedUploadFormats: ['.pdf', '.docx', '.png', '.jpg', '.cert', '.json', '.txt'],
+  allowedUploadFormats: ['.xlsx', '.xls', '.csv', '.pdf', '.docx', '.png', '.jpg', '.cert', '.json', '.txt'],
   maxUploadSizeMb: 15,
   requireExpiryDateOnUpload: true,
   requireLicenseKeyOnUpload: true,

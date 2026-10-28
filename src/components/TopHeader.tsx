@@ -17,6 +17,7 @@ import {
   LogOut,
   Mail,
   BookOpen,
+  CheckSquare,
 } from 'lucide-react';
 import { PlatformAuditModal } from './modals/PlatformAuditModal';
 
@@ -101,6 +102,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               }`}
             >
               {isAdmin ? 'Admin' : 'CSM'}
+            </span>
+          </div>
+        )}
+
+        {activeTab === 'tasks' && (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-900 font-bold">TaskFlow Kanban Board</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+              Assigned Operations
             </span>
           </div>
         )}
@@ -386,6 +396,25 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </div>
           )}
         </div>
+
+        {/* Quick TaskFlow Access */}
+        <button
+          type="button"
+          id="btn-top-taskflow"
+          onClick={() => {
+            setSelectedCustomerId(null);
+            setActiveTab('tasks');
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
+            activeTab === 'tasks'
+              ? 'bg-blue-600 text-white shadow-blue-500/20'
+              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+          }`}
+          title="Open TaskFlow execution board"
+        >
+          <CheckSquare className={`w-3.5 h-3.5 ${activeTab === 'tasks' ? 'text-white' : 'text-blue-600'}`} />
+          <span className="hidden sm:inline">TaskFlow</span>
+        </button>
 
         {/* Platform Capabilities & Audit Matrix Trigger */}
         <button

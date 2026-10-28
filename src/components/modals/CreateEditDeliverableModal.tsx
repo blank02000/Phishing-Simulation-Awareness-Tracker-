@@ -103,17 +103,43 @@ export const CreateEditDeliverableModal: React.FC<CreateEditDeliverableModalProp
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-              Deliverable Title *
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Deliverable Title *
+              </label>
+              <span className="text-[11px] font-semibold text-slate-400">Presets:</span>
+            </div>
             <input
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Q3 Cybersecurity Compliance Course"
+              placeholder="e.g. Q3 Cybersecurity Compliance Course or Gamification: Cyber Escape Room"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30"
             />
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <button
+                type="button"
+                onClick={() => setTitle('Gamification: PhishHunter Cyber Escape Room')}
+                className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-[10px] font-bold cursor-pointer"
+              >
+                🎮 Escape Room
+              </button>
+              <button
+                type="button"
+                onClick={() => setTitle('Gamification: Voice & SMS Defense Arena')}
+                className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-md text-[10px] font-bold cursor-pointer"
+              >
+                🎮 Voice & SMS Arena
+              </button>
+              <button
+                type="button"
+                onClick={() => setTitle('Gamification: Ransomware Crisis Commander')}
+                className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-md text-[10px] font-bold cursor-pointer"
+              >
+                🎮 Ransomware Commander
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

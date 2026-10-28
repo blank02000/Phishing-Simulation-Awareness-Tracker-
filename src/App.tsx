@@ -17,6 +17,7 @@ import { AnnualReportView } from './components/AnnualReportView';
 import { ReviewsView } from './components/ReviewsView';
 import { CsmManagementView } from './components/CsmManagementView';
 import { CustomizationView } from './components/CustomizationView';
+import { TaskBoard } from './components/TaskBoard';
 
 import { CreateCustomerModal } from './components/modals/CreateCustomerModal';
 import { EditCustomerModal } from './components/modals/EditCustomerModal';
@@ -287,6 +288,15 @@ function MainApp() {
                       if (tab === 'customers') setSelectedCustomerId(null);
                       setActiveTab(tab);
                     }}
+                  />
+                )}
+
+                {activeTab === 'tasks' && (
+                  <TaskBoard
+                    onSelectCustomer={handleSelectCustomer}
+                    onMarkDrillComplete={handleOpenCompleteDrill}
+                    onOpenReviewMeeting={handleOpenReviewMeeting}
+                    onMarkDeliverableComplete={handleOpenCompleteDeliverable}
                   />
                 )}
 

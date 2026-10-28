@@ -18,6 +18,14 @@ import {
   Sparkles,
   Search,
   ExternalLink,
+  BookOpen,
+  CheckSquare,
+  FileSpreadsheet,
+  PhoneCall,
+  MessageSquare,
+  ClipboardCheck,
+  ArrowRight,
+  Download,
 } from 'lucide-react';
 import { FormFieldSection } from '../../types';
 
@@ -42,7 +50,7 @@ export const PlatformAuditModal: React.FC<PlatformAuditModalProps> = ({
     getActiveSessionRemainingTime,
   } = useCustomerContext();
 
-  const [activeAuditTab, setActiveAuditTab] = useState<'users' | 'modules' | 'schema' | 'architecture'>('users');
+  const [activeAuditTab, setActiveAuditTab] = useState<'guide' | 'users' | 'modules' | 'schema' | 'architecture'>('guide');
   const [searchQuery, setSearchQuery] = useState('');
 
   if (!isOpen) return null;
@@ -125,11 +133,26 @@ export const PlatformAuditModal: React.FC<PlatformAuditModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 px-6 bg-slate-50/70 shrink-0 gap-6">
+        <div className="flex border-b border-slate-200 px-6 bg-slate-50/70 shrink-0 gap-4 sm:gap-6 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveAuditTab('guide')}
+            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+              activeAuditTab === 'guide'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-blue-600" />
+            <span>How the Tool Works (Operating Manual)</span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-blue-100 text-blue-800">
+              DOCS
+            </span>
+          </button>
           <button
             type="button"
             onClick={() => setActiveAuditTab('users')}
-            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
               activeAuditTab === 'users'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -141,7 +164,7 @@ export const PlatformAuditModal: React.FC<PlatformAuditModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveAuditTab('modules')}
-            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
               activeAuditTab === 'modules'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -153,7 +176,7 @@ export const PlatformAuditModal: React.FC<PlatformAuditModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveAuditTab('schema')}
-            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
               activeAuditTab === 'schema'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -165,7 +188,7 @@ export const PlatformAuditModal: React.FC<PlatformAuditModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveAuditTab('architecture')}
-            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
               activeAuditTab === 'architecture'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -178,6 +201,273 @@ export const PlatformAuditModal: React.FC<PlatformAuditModalProps> = ({
 
         {/* Tab Content Body */}
         <div className="p-6 overflow-y-auto flex-1 text-slate-700 space-y-6">
+          {/* TAB: OPERATING GUIDE & HOW THE TOOL WORKS */}
+          {activeAuditTab === 'guide' && (
+            <div className="space-y-6 text-slate-800">
+              {/* Hero Banner */}
+              <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-md border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/30 text-blue-300 border border-blue-400/30">
+                      Standard Operating Procedure
+                    </span>
+                    <span className="text-xs text-slate-400">CyberDrill Operations Manual v2.6</span>
+                  </div>
+                  <h3 className="text-lg font-black tracking-tight text-white">
+                    How CyberDrill Works: Complete System Walkthrough
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                    CyberDrill is an operations hub for Customer Success Managers and SecOps administrators to manage simulated cyber attacks, verify scope whitelisting, conduct formal review meetings, and generate auditable compliance certificates.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href="/HOW_THE_TOOL_WORKS.md"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>View HOW_THE_TOOL_WORKS.md</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* 7-Step Operational Lifecycle Flow */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                    7-Step Operational Lifecycle
+                  </h4>
+                  <span className="text-[11px] text-slate-500">From onboarding to annual compliance sign-off</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs">
+                  {/* Step 1 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 font-black flex items-center justify-center text-xs">
+                        1
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Onboarding</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                      <span>Account & Excel License Upload</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Create customer accounts manually, in bulk, or upload Excel licenses (<code className="text-emerald-700 font-mono">.xlsx</code>). SheetJS parses multi-sheet workbooks and allocates quotas for Phishing, Vishing, Smishing, and Gamification games.
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 font-black flex items-center justify-center text-xs">
+                        2
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Planning</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-indigo-600" />
+                      <span>Annual Simulation Plan</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Configure yearly requirements (e.g. 4 drills/year, quarterly intervals). Schedule simulation dates across vectors: Email Phishing, Voice Vishing, SMS Smishing, and Ransomware crisis drills.
+                    </p>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 font-black flex items-center justify-center text-xs">
+                        3
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Pre-Drill</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                      <span>Scope Review & CISO Sign-Off</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Conduct pre-drill Scope Reviews to verify mail filter whitelisting, authorize target email domains, set seat counts, confirm phone/SMS prefixes, and document formal CISO sign-off.
+                    </p>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-rose-100 text-rose-700 font-black flex items-center justify-center text-xs">
+                        4
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Execution</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-rose-600" />
+                      <span>Drill Execution & Metrics</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Execute simulation campaigns. Record total participants, Click Rate %, Credential Submission %, and ProPatrol Reporting %. The system calculates Passed, Needs Improvement, or High Risk outcomes.
+                    </p>
+                  </div>
+
+                  {/* Step 5 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-purple-100 text-purple-700 font-black flex items-center justify-center text-xs">
+                        5
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Governance</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <MessageSquare className="w-4 h-4 text-purple-600" />
+                      <span>Debrief & Minutes of Meeting</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Host drill debrief meetings. Log key executive decisions, recommendations, and trackable action items with owners and deadlines. Generate one-click MoM email summaries.
+                    </p>
+                  </div>
+
+                  {/* Step 6 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 font-black flex items-center justify-center text-xs">
+                        6
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Operations</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <CheckSquare className="w-4 h-4 text-emerald-600" />
+                      <span>TaskFlow Kanban Board</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Track operational tasks across To Do, In Progress, and Done. Tasks auto-sync with scheduled drills, upcoming deliverables, and MoM action items with direct deep-links.
+                    </p>
+                  </div>
+
+                  {/* Step 7 */}
+                  <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/90 space-y-2 hover:border-blue-300 transition-colors md:col-span-2 lg:col-span-3">
+                    <div className="flex items-center justify-between">
+                      <span className="w-6 h-6 rounded-lg bg-teal-100 text-teal-800 font-black flex items-center justify-center text-xs">
+                        7
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Compliance</span>
+                    </div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-teal-600" />
+                      <span>Compliance Verification, Alerts & PDF Audit Reports</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Monitor live SLA status (On Track, Due Soon, Overdue, At Risk). Generate multi-page executive PDF compliance certificates with vector charts, participation stats, and historical audit tables for ISO 27001 and SOC 2 audits.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation Vectors & Categorization */}
+              <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-3">
+                <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  <span>Supported Simulation Vectors & Customer Categorization</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-1">
+                    <div className="font-bold text-blue-900 flex items-center gap-1.5">
+                      <span>🎣</span>
+                      <span>Phishing Simulations</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">
+                      Email simulations targeting corporate inboxes. Supports credential harvesting, attachments, executive spear phishing, and urgent invoices.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80 space-y-1">
+                    <div className="font-bold text-purple-900 flex items-center gap-1.5">
+                      <PhoneCall className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Vishing (Voice Phishing)</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">
+                      Simulated phone calls impersonating IT Helpdesk, banks, or suppliers to test employee voice verification protocols.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200/80 space-y-1">
+                    <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Smishing (SMS Phishing)</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">
+                      SMS text message lures with shortlinks simulating MFA verification, delivery tracking, and payroll notifications.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Exact Mathematical Formulae */}
+              <div className="p-4 bg-slate-900 text-white rounded-xl space-y-3 font-mono text-xs">
+                <div className="font-sans font-bold text-xs text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  <span>SLA State Machine & Mathematical Decision Logic</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                  <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700 space-y-1">
+                    <div className="text-emerald-400 font-bold font-sans">Drill SLA Status Logic:</div>
+                    <div className="text-slate-300">
+                      • Completed if completionDate &le; plannedDate<br />
+                      • Completed Late if completionDate &gt; plannedDate<br />
+                      • Overdue if refDate &gt; plannedDate<br />
+                      • Due Soon if refDate &ge; (plannedDate - dueSoonDays)<br />
+                      • Upcoming if refDate &lt; (plannedDate - dueSoonDays)
+                    </div>
+                  </div>
+                  <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700 space-y-1">
+                    <div className="text-indigo-400 font-bold font-sans">Account Compliance Status:</div>
+                    <div className="text-slate-300">
+                      • Completed: totalCompleted &ge; annualRequirement<br />
+                      • Overdue: any active drill is Overdue<br />
+                      • At Risk: &gt; 1 drill overdue or time insufficient<br />
+                      • Due Soon: any drill is Due Soon<br />
+                      • On Track: all scheduled drills upcoming
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Interactive Quick Links */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200">
+                <span className="text-xs text-slate-500">
+                  Switch to other tabs above to inspect live User RBAC, the 10 Module registry, or Custom Field schemas.
+                </span>
+                <div className="flex items-center gap-2">
+                  {onNavigateTab && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onNavigateTab('tasks');
+                      }}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-blue-200"
+                    >
+                      <span>Open TaskFlow</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {onNavigateTab && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onNavigateTab('customers');
+                      }}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                    >
+                      <span>View Customers</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: USERS & ROLE MATRIX */}
           {activeAuditTab === 'users' && (
             <div className="space-y-6">

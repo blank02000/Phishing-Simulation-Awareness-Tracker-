@@ -13,6 +13,7 @@ import {
   MessageSquare,
   LogOut,
   Sliders,
+  CheckSquare,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +37,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'dashboard',
       label: 'Dashboard',
       icon: <LayoutDashboard className="w-5 h-5" />,
+    },
+    {
+      id: 'tasks',
+      label: 'TaskFlow',
+      icon: <CheckSquare className="w-5 h-5" />,
     },
     {
       id: 'customers',

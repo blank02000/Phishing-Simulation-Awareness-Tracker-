@@ -33,6 +33,7 @@ const DRILL_TYPES: DrillType[] = [
   'Phishing Email Simulation',
   'Spear Phishing / Executive',
   'Smishing (SMS)',
+  'Vishing (Voice Phishing)',
   'Credential Harvesting',
   'Ransomware Awareness',
   'USB Drop / Physical',

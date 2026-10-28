@@ -13,10 +13,12 @@ import {
   RotateCcw,
   MessageSquare,
   Sliders,
+  CheckSquare,
 } from 'lucide-react';
 
 export type NavTab =
   | 'dashboard'
+  | 'tasks'
   | 'customers'
   | 'calendar'
   | 'reminders'
@@ -53,6 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'tasks', label: 'TaskFlow', icon: <CheckSquare className="w-4 h-4" /> },
     { id: 'customers', label: 'Customers', icon: <Users className="w-4 h-4" /> },
     { id: 'calendar', label: 'Drill Calendar', icon: <Calendar className="w-4 h-4" /> },
     { id: 'reviews', label: 'Debrief Reviews', icon: <MessageSquare className="w-4 h-4" /> },

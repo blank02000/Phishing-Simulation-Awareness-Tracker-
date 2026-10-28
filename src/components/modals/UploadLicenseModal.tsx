@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Customer, CustomerLicenseFile } from '../../types';
+import { Customer, CustomerLicenseFile, ParsedLicenseExcelData } from '../../types';
 import { useCustomerContext } from '../../context/CustomerContext';
 import { formatDisplayDate } from '../../utils/drillCalculator';
+import { parseUploadedExcelLicense, createDefaultCustomerLicenseExcel, downloadExcelLicenseFile } from '../../utils/excelLicenseHelper';
 import {
   X,
   Upload,
@@ -12,6 +13,10 @@ import {
   CheckCircle2,
   AlertCircle,
   FileCheck,
+  FileSpreadsheet,
+  Layers,
+  Download,
+  Sparkles,
 } from 'lucide-react';
 
 interface UploadLicenseModalProps {
@@ -56,12 +61,14 @@ export const UploadLicenseModal: React.FC<UploadLicenseModalProps> = ({
   // File Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string>('');
+  const [parsedExcelData, setParsedExcelData] = useState<ParsedLicenseExcelData | null>(null);
   const [fileError, setFileError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError('');
     const file = e.target.files?.[0];
     if (!file) return;
@@ -76,6 +83,9 @@ export const UploadLicenseModal: React.FC<UploadLicenseModalProps> = ({
     // Check extension
     const extension = '.' + file.name.split('.').pop()?.toLowerCase();
     const allowed = licenseConfig.allowedUploadFormats || [
+      '.xlsx',
+      '.xls',
+      '.csv',
       '.pdf',
       '.docx',
       '.png',
@@ -91,12 +101,54 @@ export const UploadLicenseModal: React.FC<UploadLicenseModalProps> = ({
 
     setSelectedFile(file);
 
+    // If Excel or CSV file, parse with SheetJS
+    const isSpreadsheet = ['.xlsx', '.xls', '.csv'].includes(extension);
+    if (isSpreadsheet) {
+      setIsParsingExcel(true);
+      try {
+        const parsed = await parseUploadedExcelLicense(file);
+        setParsedExcelData(parsed);
+
+        // Auto-populate seats if discovered
+        if (parsed.entitlements?.licensedSeats && parsed.entitlements.licensedSeats > 0) {
+          setTargetSeats(parsed.entitlements.licensedSeats);
+        }
+
+        // Auto-enrich notes
+        if (!notes) {
+          setNotes(
+            `Imported license agreement from spreadsheet "${file.name}" with ${parsed.totalSheets} sheets. Entitlements detected: Phishing (${parsed.entitlements?.phishingDrillsQuota || 4}), Vishing (${parsed.entitlements?.vishingDrillsQuota || 2}), Smishing (${parsed.entitlements?.smishingDrillsQuota || 4}), Gamification (${parsed.entitlements?.gamificationGamesQuota || 6}).`
+          );
+        }
+      } catch (err: any) {
+        console.error('Error parsing Excel file:', err);
+        setFileError(`Could not parse spreadsheet: ${err.message || 'Invalid format'}`);
+      } finally {
+        setIsParsingExcel(false);
+      }
+    } else {
+      setParsedExcelData(null);
+    }
+
     // Read preview/data URL
     const reader = new FileReader();
     reader.onload = () => {
       setFileDataUrl(reader.result as string);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDownloadSampleTemplate = () => {
+    const sample = createDefaultCustomerLicenseExcel(
+      customer.companyName,
+      licenseKey,
+      targetSeats,
+      expiryDate
+    );
+    downloadExcelLicenseFile(
+      sample.parsedData.sheets,
+      `${customer.companyName.replace(/[^a-zA-Z0-9]/g, '_')}_License_Entitlements_Template.xlsx`
+    );
   };
 
   const handleApplyPresetDuration = (months: number) => {
@@ -121,6 +173,14 @@ export const UploadLicenseModal: React.FC<UploadLicenseModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      // If no Excel was uploaded, generate a standard verified Excel dataset for this license
+      const finalExcelData = parsedExcelData || createDefaultCustomerLicenseExcel(
+        customer.companyName,
+        licenseKey.trim(),
+        Number(targetSeats) || 1250,
+        expiryDate
+      ).parsedData;
+
       const licensePayload: Omit<CustomerLicenseFile, 'id' | 'uploadedAt' | 'uploadedBy'> = {
         licenseKey: licenseKey.trim(),
         name: licenseName.trim(),
@@ -129,13 +189,18 @@ export const UploadLicenseModal: React.FC<UploadLicenseModalProps> = ({
         issueDate,
         expiryDate,
         status: 'Active',
-        fileName: selectedFile?.name || `${customer.companyName.replace(/\s+/g, '_')}_License.pdf`,
+        fileName: selectedFile?.name || `${customer.companyName.replace(/\s+/g, '_')}_License_Entitlements.xlsx`,
         fileSize: selectedFile?.size || 1024000,
-        fileType: selectedFile?.type || 'application/pdf',
+        fileType: selectedFile?.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         fileDataUrl: fileDataUrl || undefined,
         notes: notes.trim() || undefined,
         isAutoGenerated: !selectedFile,
         digitalSignature: `SHA256:${Math.random().toString(16).substring(2, 12)}`,
+        excelData: finalExcelData,
+        phishingQuota: finalExcelData.entitlements?.phishingDrillsQuota || 4,
+        vishingQuota: finalExcelData.entitlements?.vishingDrillsQuota || 2,
+        smishingQuota: finalExcelData.entitlements?.smishingDrillsQuota || 4,
+        gamificationQuota: finalExcelData.entitlements?.gamificationGamesQuota || 6,
       };
 
       addCustomerLicense(customer.id, licensePayload);
@@ -174,40 +239,93 @@ export const UploadLicenseModal: React.FC<UploadLicenseModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {/* File Dropzone */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              License Document / Certificate File
-            </label>
-            <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-5 text-center transition-colors bg-slate-50/50">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700">
+                License Document / Excel Spreadsheet <span className="text-emerald-600 font-bold">(.xlsx, .xls, .csv, .pdf)</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleDownloadSampleTemplate}
+                className="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3 h-3" />
+                <span>Download Sample .xlsx Template</span>
+              </button>
+            </div>
+
+            <div className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl p-5 text-center transition-colors bg-emerald-50/20">
               <input
                 type="file"
                 id="license-file-input"
                 className="hidden"
-                accept={licenseConfig.allowedUploadFormats.join(',')}
+                accept=".xlsx,.xls,.csv,.pdf,.docx,.png,.cert,.json"
                 onChange={handleFileChange}
               />
               <label htmlFor="license-file-input" className="cursor-pointer block">
                 {selectedFile ? (
-                  <div className="flex items-center justify-center gap-3 text-left">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                      <FileCheck className="w-6 h-6" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-3 text-left">
+                      <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        {selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls') || selectedFile.name.endsWith('.csv') ? (
+                          <FileSpreadsheet className="w-6 h-6 text-emerald-700" />
+                        ) : (
+                          <FileCheck className="w-6 h-6 text-emerald-700" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{selectedFile.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • {isParsingExcel ? 'Parsing spreadsheet...' : 'File attached & ready to provision'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">{selectedFile.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • Ready to attach
-                      </p>
-                    </div>
+
+                    {parsedExcelData && (
+                      <div className="bg-emerald-50/80 p-3 rounded-xl border border-emerald-200 text-left text-xs space-y-2">
+                        <div className="flex items-center justify-between text-emerald-900 font-bold">
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                            Spreadsheet Sheets Discovered ({parsedExcelData.totalSheets}):
+                          </span>
+                          <span className="text-[10px] bg-emerald-200/60 px-2 py-0.5 rounded-full font-mono">
+                            Auto-Parsed
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {parsedExcelData.sheets.map((s) => (
+                            <span
+                              key={s.sheetName}
+                              className="px-2 py-0.5 bg-white border border-emerald-200 rounded-md text-[11px] font-semibold text-emerald-950 flex items-center gap-1"
+                            >
+                              <Layers className="w-3 h-3 text-emerald-600" />
+                              <span>{s.sheetName}</span>
+                              <span className="text-[10px] text-slate-500">({s.rowCount} rows)</span>
+                            </span>
+                          ))}
+                        </div>
+                        {parsedExcelData.entitlements && (
+                          <div className="text-[11px] text-emerald-900 grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 border-t border-emerald-200/60 font-medium">
+                            <div>🎣 Phishing: <strong>{parsedExcelData.entitlements.phishingDrillsQuota || 4} drills</strong></div>
+                            <div>📞 Vishing: <strong>{parsedExcelData.entitlements.vishingDrillsQuota || 2} calls</strong></div>
+                            <div>💬 Smishing: <strong>{parsedExcelData.entitlements.smishingDrillsQuota || 4} SMS</strong></div>
+                            <div>🎮 Gamification: <strong>{parsedExcelData.entitlements.gamificationGamesQuota || 6} games</strong></div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
-                    <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-700">
-                      Click to browse or drop license agreement
+                    <FileSpreadsheet className="w-9 h-9 text-emerald-600 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-slate-800">
+                      Upload Customer License Excel File (.xlsx, .xls, .csv)
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Supported: {licenseConfig.allowedUploadFormats.join(', ')} (Max{' '}
-                      {licenseConfig.maxUploadSizeMb} MB)
+                      Drag & drop your contract spreadsheet to automatically extract seat quotas, vishing/smishing allocations, and gamification deliverables.
                     </p>
+                    <span className="inline-block mt-2 px-3 py-1 bg-white border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg shadow-2xs">
+                      Browse Files
+                    </span>
                   </div>
                 )}
               </label>
