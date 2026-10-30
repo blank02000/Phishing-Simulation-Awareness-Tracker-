@@ -14,6 +14,7 @@ import {
   LogOut,
   Sliders,
   CheckSquare,
+  GraduationCap,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -47,6 +48,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'customers',
       label: 'Customers',
       icon: <Users className="w-5 h-5" />,
+    },
+    {
+      id: 'prolms',
+      label: 'ProLMS Tracker',
+      icon: <GraduationCap className="w-5 h-5" />,
     },
     {
       id: 'calendar',

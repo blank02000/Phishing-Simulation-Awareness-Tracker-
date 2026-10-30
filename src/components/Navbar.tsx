@@ -14,12 +14,14 @@ import {
   MessageSquare,
   Sliders,
   CheckSquare,
+  GraduationCap,
 } from 'lucide-react';
 
 export type NavTab =
   | 'dashboard'
   | 'tasks'
   | 'customers'
+  | 'prolms'
   | 'calendar'
   | 'reminders'
   | 'reports'
@@ -57,6 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'tasks', label: 'TaskFlow', icon: <CheckSquare className="w-4 h-4" /> },
     { id: 'customers', label: 'Customers', icon: <Users className="w-4 h-4" /> },
+    { id: 'prolms', label: 'ProLMS Tracker', icon: <GraduationCap className="w-4 h-4" /> },
     { id: 'calendar', label: 'Drill Calendar', icon: <Calendar className="w-4 h-4" /> },
     { id: 'reviews', label: 'Debrief Reviews', icon: <MessageSquare className="w-4 h-4" /> },
     {

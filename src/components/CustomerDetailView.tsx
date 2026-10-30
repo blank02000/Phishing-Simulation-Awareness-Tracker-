@@ -127,6 +127,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
   const [drillCategoryFilter, setDrillCategoryFilter] = useState<'all' | 'phishing' | 'vishing' | 'smishing'>('all');
   const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
   const [editCustomerTab, setEditCustomerTab] = useState<'profile' | 'dates' | 'drills'>('profile');
+  const [lmsSubTab, setLmsSubTab] = useState<'contracted' | 'courses'>('contracted');
 
   const handleOpenEditCustomer = (tab: 'profile' | 'dates' | 'drills' = 'profile') => {
     setEditCustomerTab(tab);
@@ -707,23 +708,60 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-emerald-600" />
-                {selectedYear} Pro LMS Trackable Deliverables
+                {selectedYear} Pro LMS Deliverables & Learning Hub
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Custom learning management modules, compliance quizzes, and curriculum deliverables created for this account.
+                Contracted ProLMS license deliverables (Infographics, SCORM, Wallpapers, Videos, Games) and customer learning modules.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => onOpenAddDeliverable(customer, selectedYear)}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add LMS Deliverable</span>
-            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setLmsSubTab('contracted')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    lmsSubTab === 'contracted'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Contracted License Deliverables
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLmsSubTab('courses')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    lmsSubTab === 'courses'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Course Curriculum ({deliverables.length})
+                </button>
+              </div>
+
+              {lmsSubTab === 'courses' && canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAddDeliverable(customer, selectedYear)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add LMS Deliverable</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          {lmsSubTab === 'contracted' ? (
+            <LicenseExpiryTrackerSection
+              customer={customer}
+              onOpenUploadLicense={() => setIsUploadLicenseOpen(true)}
+              canEdit={canEdit}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
             {deliverables.length === 0 ? (
               <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-3">
                 <BookOpen className="w-8 h-8 text-slate-400 mx-auto" />
@@ -758,6 +796,11 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-bold text-slate-900 text-sm">{del.title}</h3>
                             <DrillStatusBadge status={status} size="sm" />
+                            {del.type && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                {del.type}
+                              </span>
+                            )}
                             <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 uppercase">
                               {del.frequency}
                             </span>
@@ -827,6 +870,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({
               })
             )}
           </div>
+          )}
         </div>
       ) : (
         <>

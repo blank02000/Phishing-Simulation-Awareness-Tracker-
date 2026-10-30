@@ -141,6 +141,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           </div>
         )}
 
+        {activeTab === 'prolms' && (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-900 font-bold">ProLMS Client Deliverable Tracker</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+              License-Integrated
+            </span>
+          </div>
+        )}
+
         {activeTab === 'calendar' && (
           <span className="text-slate-900 font-bold">Drill & Debrief Calendar</span>
         )}

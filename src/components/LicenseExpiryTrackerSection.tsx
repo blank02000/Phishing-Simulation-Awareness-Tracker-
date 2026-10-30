@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Customer, CustomerLicenseFile, GamificationGameDeliverable, LmsDeliverable, DrillRecord } from '../types';
+import { Customer, CustomerLicenseFile, GamificationGameDeliverable, LmsDeliverable, DrillRecord, PlannedDeliverableRequirement, ActualDeliveryRecord } from '../types';
 import { useCustomerContext } from '../context/CustomerContext';
 import { formatDisplayDate } from '../utils/drillCalculator';
 import { getDaysUntilExpiry, calculateLicenseStatus } from '../utils/customizationDefaults';
@@ -7,7 +7,17 @@ import { DigitalLicenseCertificateModal } from './common/DigitalLicenseCertifica
 import { ExcelLicenseViewerModal } from './common/ExcelLicenseViewerModal';
 import { InteractiveGamePlayerModal } from './common/InteractiveGamePlayerModal';
 import { ScheduleLicenseDrillModal } from './modals/ScheduleLicenseDrillModal';
+import { AddEditDeliverableRequirementModal } from './modals/AddEditDeliverableRequirementModal';
+import { RecordDeliveryModal } from './modals/RecordDeliveryModal';
+import { DeliverableHistoryModal } from './modals/DeliverableHistoryModal';
 import { DEFAULT_GAMIFICATION_GAMES, downloadExcelLicenseFile, createDefaultCustomerLicenseExcel } from '../utils/excelLicenseHelper';
+import {
+  DELIVERABLE_CATEGORIES,
+  calculateDeliverablePeriodProgress,
+  getDeliverableStatusBadge,
+  generateReportingPeriods,
+  getReportingPeriodForDate,
+} from '../utils/deliverableTrackerHelper';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -60,6 +70,10 @@ export const LicenseExpiryTrackerSection: React.FC<LicenseExpiryTrackerSectionPr
     renewCustomerLicense,
     deleteCustomerLicense,
     updateCustomer,
+    referenceDate,
+    allPlannedDeliverables,
+    allActualDeliveries,
+    deletePlannedDeliverable,
   } = useCustomerContext();
 
   const warningThreshold = customizationSettings.licenseConfig.expiryWarningThresholdDays || 60;
@@ -68,6 +82,7 @@ export const LicenseExpiryTrackerSection: React.FC<LicenseExpiryTrackerSectionPr
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expiring' | 'expired'>('all');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [selectedDelivCategory, setSelectedDelivCategory] = useState<string>('all');
 
   // Modals
   const [certificateModal, setCertificateModal] = useState<{
@@ -116,6 +131,30 @@ export const LicenseExpiryTrackerSection: React.FC<LicenseExpiryTrackerSectionPr
     license: null,
     customerId: '',
     durationMonths: 12,
+  });
+
+  const [reqModalState, setReqModalState] = useState<{
+    isOpen: boolean;
+    requirement: PlannedDeliverableRequirement | null;
+  }>({
+    isOpen: false,
+    requirement: null,
+  });
+
+  const [deliveryModalState, setDeliveryModalState] = useState<{
+    isOpen: boolean;
+    delivery: ActualDeliveryRecord | null;
+    defaultRequirement?: PlannedDeliverableRequirement | null;
+  }>({
+    isOpen: false,
+    delivery: null,
+  });
+
+  const [historyModalState, setHistoryModalState] = useState<{
+    isOpen: boolean;
+    requirement?: PlannedDeliverableRequirement | null;
+  }>({
+    isOpen: false,
   });
 
   // Collect target list of licenses with customer metadata
@@ -236,6 +275,52 @@ export const LicenseExpiryTrackerSection: React.FC<LicenseExpiryTrackerSectionPr
   const gamificationGamesList = useMemo(() => {
     return customer?.gamificationGames || DEFAULT_GAMIFICATION_GAMES;
   }, [customer]);
+
+  // Deliverables associated with this license / customer
+  const customerPlannedDeliverables = useMemo(() => {
+    if (customer) {
+      return allPlannedDeliverables.filter((r) => r.customerId === customer.id);
+    }
+    return allPlannedDeliverables;
+  }, [customer, allPlannedDeliverables]);
+
+  const deliverableStats = useMemo(() => {
+    let totalTarget = 0;
+    let totalDelivered = 0;
+    let completedCount = 0;
+    let overdueCount = 0;
+
+    customerPlannedDeliverables.forEach((req) => {
+      totalTarget += req.targetQuantityPerPeriod;
+      const activePeriod = getReportingPeriodForDate(referenceDate, req.frequency);
+      const progress = calculateDeliverablePeriodProgress(
+        req,
+        allActualDeliveries,
+        activePeriod,
+        referenceDate
+      );
+      totalDelivered += progress.deliveredQuantity;
+      if (progress.status === 'Completed') completedCount += 1;
+      else if (progress.status === 'Overdue') overdueCount += 1;
+    });
+
+    const completionRate =
+      totalTarget > 0 ? Math.min(100, Math.round((totalDelivered / totalTarget) * 100)) : 0;
+
+    return {
+      totalRequirements: customerPlannedDeliverables.length,
+      totalTarget,
+      totalDelivered,
+      completedCount,
+      overdueCount,
+      completionRate,
+    };
+  }, [customerPlannedDeliverables, allActualDeliveries, referenceDate]);
+
+  const filteredCustomerDeliverables = useMemo(() => {
+    if (selectedDelivCategory === 'all') return customerPlannedDeliverables;
+    return customerPlannedDeliverables.filter((r) => r.category === selectedDelivCategory);
+  }, [customerPlannedDeliverables, selectedDelivCategory]);
 
   // Filtered Rows for Global/Customer Table
   const filteredRows = useMemo(() => {
@@ -732,6 +817,274 @@ export const LicenseExpiryTrackerSection: React.FC<LicenseExpiryTrackerSectionPr
         </div>
       )}
 
+      {/* Contracted ProLMS Client Deliverables Entitlements Section */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-emerald-50/60 via-slate-50 to-white">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  {customer ? `${customer.companyName} — ProLMS License Deliverables` : 'ProLMS Contracted Deliverables Matrix'}
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  {deliverableStats.completionRate}% Fulfilled
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Periodic deliverable requirements (Infographics, Posters, Wallpapers, Videos, SCORM, Games) contracted under this client license.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setHistoryModalState({ isOpen: true, requirement: null })}
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              <span>Fulfillment History</span>
+            </button>
+
+            {canEdit && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setDeliveryModalState({ isOpen: true, delivery: null, defaultRequirement: null })}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>+ Record Delivery</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReqModalState({ isOpen: true, requirement: null })}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>+ Add Requirement</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Deliverables Mini KPI Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 bg-slate-50/70 border-b border-slate-200 text-xs">
+          <div className="bg-white p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Requirements</span>
+            <div className="text-lg font-bold text-slate-800 mt-0.5">{deliverableStats.totalRequirements}</div>
+          </div>
+          <div className="bg-white p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Target Output</span>
+            <div className="text-lg font-bold text-indigo-700 mt-0.5">{deliverableStats.totalTarget} items</div>
+          </div>
+          <div className="bg-white p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Delivered</span>
+            <div className="text-lg font-bold text-emerald-700 mt-0.5">{deliverableStats.totalDelivered} items</div>
+          </div>
+          <div className="bg-white p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Overdue</span>
+            <div className={`text-lg font-bold mt-0.5 ${deliverableStats.overdueCount > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+              {deliverableStats.overdueCount}
+            </div>
+          </div>
+          <div className="bg-white p-3 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Fulfillment Rate</span>
+            <div className="text-lg font-bold text-emerald-600 mt-0.5">{deliverableStats.completionRate}%</div>
+            <div className="w-full bg-slate-100 rounded-full h-1 mt-1.5 overflow-hidden">
+              <div
+                className="bg-emerald-600 h-1 rounded-full transition-all"
+                style={{ width: `${deliverableStats.completionRate}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Category Filter Tabs */}
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto text-xs">
+          <button
+            type="button"
+            onClick={() => setSelectedDelivCategory('all')}
+            className={`px-3 py-1 rounded-lg font-bold transition-colors cursor-pointer shrink-0 ${
+              selectedDelivCategory === 'all'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            All Categories ({customerPlannedDeliverables.length})
+          </button>
+          {DELIVERABLE_CATEGORIES.map((cat) => {
+            const count = customerPlannedDeliverables.filter((r) => r.category === cat).length;
+            if (count === 0 && selectedDelivCategory !== cat) return null;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedDelivCategory(cat)}
+                className={`px-3 py-1 rounded-lg font-semibold transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  selectedDelivCategory === cat
+                    ? 'bg-emerald-600 text-white font-bold'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <span>{cat}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Deliverables Cards / List */}
+        <div className="p-5">
+          {filteredCustomerDeliverables.length === 0 ? (
+            <div className="text-center py-10 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+              <Layers className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <h4 className="text-xs font-bold text-slate-700">No deliverable requirements defined</h4>
+              <p className="text-[11px] text-slate-500 max-w-sm mx-auto mt-0.5">
+                Define the client&apos;s contractual ProLMS deliverables (e.g. Infographics, Posters, SCORM modules, Games) by frequency.
+              </p>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setReqModalState({ isOpen: true, requirement: null })}
+                  className="mt-3 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer inline-flex items-center gap-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Add First Requirement</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCustomerDeliverables.map((req) => {
+                const activePeriod = getReportingPeriodForDate(referenceDate, req.frequency);
+                const progress = calculateDeliverablePeriodProgress(
+                  req,
+                  allActualDeliveries,
+                  activePeriod,
+                  referenceDate
+                );
+                const reqDeliveries = allActualDeliveries.filter((d) => d.requirementId === req.id);
+
+                return (
+                  <div
+                    key={req.id}
+                    className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:shadow-xs transition-all bg-white flex flex-col justify-between space-y-3"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          {req.category}
+                        </span>
+                        {getDeliverableStatusBadge(progress.status)}
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-900 leading-snug">{req.title}</h4>
+                      {req.notes && (
+                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{req.notes}</p>
+                      )}
+
+                      <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs space-y-2">
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-[11px] font-medium">Frequency:</span>
+                          <span className="font-bold text-slate-800 capitalize bg-white px-2 py-0.5 rounded border border-slate-200 text-[10px]">
+                            {req.frequency} ({progress.period.label})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-[11px] font-medium">Target / Delivered:</span>
+                          <span className="font-bold text-slate-900">
+                            {progress.deliveredQuantity} of {progress.plannedQuantity} delivered
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] text-slate-500">
+                            <span>Fulfillment</span>
+                            <span className="font-bold text-emerald-700">{progress.completionPercentage}%</span>
+                          </div>
+                          <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="bg-emerald-600 h-1.5 rounded-full transition-all"
+                              style={{ width: `${progress.completionPercentage}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {progress.lastDeliveryDate && (
+                          <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                            <span>Last Delivery:</span>
+                            <span className="font-semibold text-slate-700">{progress.lastDeliveryDate}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setHistoryModalState({ isOpen: true, requirement: req })}
+                          className="px-2 py-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                          title="View all files delivered against this requirement"
+                        >
+                          History ({reqDeliveries.length})
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {canEdit && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setDeliveryModalState({ isOpen: true, delivery: null, defaultRequirement: req })}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                              title="Record a new delivery file for this requirement"
+                            >
+                              <PlusCircle className="w-3 h-3" />
+                              <span>Log File</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setReqModalState({ isOpen: true, requirement: req })}
+                              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                              title="Edit Requirement Quota & Schedule"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Delete deliverable requirement "${req.title}"?`)) {
+                                  deletePlannedDeliverable(req.id, req.customerId, req.licenseId);
+                                }
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                              title="Delete Requirement"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Expiry Tracking KPI Dashboard */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Active Licenses */}
@@ -1206,6 +1559,34 @@ export const LicenseExpiryTrackerSection: React.FC<LicenseExpiryTrackerSectionPr
           </div>
         </div>
       )}
+
+      {/* Deliverable Requirement Modal */}
+      <AddEditDeliverableRequirementModal
+        isOpen={reqModalState.isOpen}
+        onClose={() => setReqModalState({ isOpen: false, requirement: null })}
+        requirement={reqModalState.requirement}
+        defaultCustomerId={customer?.id}
+        defaultLicenseId={primaryLicense?.id}
+      />
+
+      {/* Record Delivery Modal */}
+      <RecordDeliveryModal
+        isOpen={deliveryModalState.isOpen}
+        onClose={() => setDeliveryModalState({ isOpen: false, delivery: null, defaultRequirement: null })}
+        delivery={deliveryModalState.delivery}
+        defaultRequirement={deliveryModalState.defaultRequirement}
+        defaultCustomerId={customer?.id}
+        defaultLicenseId={primaryLicense?.id}
+      />
+
+      {/* Deliverable History Audit Modal */}
+      <DeliverableHistoryModal
+        isOpen={historyModalState.isOpen}
+        onClose={() => setHistoryModalState({ isOpen: false, requirement: null })}
+        requirement={historyModalState.requirement}
+        customer={customer}
+        onOpenRecordDelivery={(req) => setDeliveryModalState({ isOpen: true, delivery: null, defaultRequirement: req || null })}
+      />
     </div>
   );
 };

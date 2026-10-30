@@ -18,6 +18,7 @@ import { ReviewsView } from './components/ReviewsView';
 import { CsmManagementView } from './components/CsmManagementView';
 import { CustomizationView } from './components/CustomizationView';
 import { TaskBoard } from './components/TaskBoard';
+import { ProLmsDeliverableTrackerView } from './components/prolms/ProLmsDeliverableTrackerView';
 
 import { CreateCustomerModal } from './components/modals/CreateCustomerModal';
 import { EditCustomerModal } from './components/modals/EditCustomerModal';
@@ -309,6 +310,10 @@ function MainApp() {
                     onOpenEditCustomer={handleOpenEditCustomer}
                     onOpenCustomization={() => setActiveTab('customization')}
                   />
+                )}
+
+                {activeTab === 'prolms' && (
+                  <ProLmsDeliverableTrackerView />
                 )}
 
                 {activeTab === 'calendar' && (

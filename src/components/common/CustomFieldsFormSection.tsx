@@ -4,18 +4,10 @@ import { useCustomerContext } from '../../context/CustomerContext';
 import {
   Plus,
   Trash2,
-  ShieldCheck,
   Check,
   X,
   SlidersHorizontal,
-  FileText,
-  Hash,
-  Calendar,
-  ListFilter,
-  CheckSquare,
-  AlignLeft,
   AlertCircle,
-  HelpCircle,
 } from 'lucide-react';
 
 interface CustomFieldsFormSectionProps {
@@ -110,61 +102,64 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
     );
   };
 
+  // If no fields and not adding, render a clean, understated button
+  if (fields.length === 0 && !isAddingField) {
+    if (!isAdmin) return null;
+    return (
+      <div className={`pt-3 border-t border-slate-100 flex items-center justify-between ${className}`}>
+        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>{formTitle}</span>
+        </div>
+        <button
+          type="button"
+          id={`btn-add-field-${formType}`}
+          onClick={() => setIsAddingField(true)}
+          className="text-xs font-semibold text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+        >
+          <Plus className="w-3 h-3 text-emerald-600" />
+          <span>+ Add Custom Field</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className={`rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 transition-all ${className}`}>
+    <div className={`pt-3 border-t border-slate-100 space-y-3 ${className}`}>
       {/* Section Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200/80">
+      <div className="flex items-center justify-between pb-1 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold text-slate-800 tracking-tight">
-                {formTitle}
-              </h4>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100/90 text-purple-700 border border-purple-200">
-                <ShieldCheck className="w-2.5 h-2.5" />
-                Admin Feature
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              {isAdmin
-                ? 'Add custom form fields dynamically to capture custom requirements.'
-                : 'Custom form fields specified by your administrator.'}
-            </p>
-          </div>
+          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+            {formTitle}
+          </span>
+          {fields.length > 0 && (
+            <span className="text-[10px] bg-slate-100 text-slate-600 font-semibold px-2 py-0.5 rounded-full border border-slate-200">
+              {fields.length}
+            </span>
+          )}
         </div>
 
-        {/* Add Field Button (Admin only) */}
-        {isAdmin ? (
+        {isAdmin && !isAddingField && (
           <button
             type="button"
             id={`btn-add-field-${formType}`}
             onClick={() => setIsAddingField(true)}
-            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Add a new custom field to this form"
+            className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+            title="Add a custom form field"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3 h-3 text-emerald-600" />
             <span>+ Add Field</span>
           </button>
-        ) : (
-          <span
-            className="text-[11px] text-slate-400 flex items-center gap-1 bg-slate-100 px-2 py-1 rounded"
-            title="Only administrators can add new custom fields"
-          >
-            <ShieldCheck className="w-3 h-3 text-slate-400" />
-            <span>Admin-managed fields</span>
-          </span>
         )}
       </div>
 
       {/* Admin Inline Creator Panel */}
       {isAddingField && isAdmin && (
-        <div className="mt-3 p-3.5 bg-white rounded-xl border-2 border-purple-200 shadow-sm animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="flex items-center justify-between pb-2 mb-3 border-b border-purple-100">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-              <ShieldCheck className="w-4 h-4 text-purple-600" />
+        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
               <span>Configure New Form Field</span>
             </div>
             <button
@@ -173,14 +168,14 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                 setIsAddingField(false);
                 setError(null);
               }}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {error && (
-            <div className="mb-3 p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center gap-1.5">
+            <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -197,7 +192,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder="e.g. PO Number, Escalation Contact, Risk Rating"
-                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
                 autoFocus
               />
             </div>
@@ -210,7 +205,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
               <select
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as CustomFieldType)}
-                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
               >
                 <option value="text">Short Text (Single Line)</option>
                 <option value="textarea">Long Text / Paragraph</option>
@@ -233,7 +228,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   value={newOptions}
                   onChange={(e) => setNewOptions(e.target.value)}
                   placeholder="e.g. Tier 1, Tier 2, Tier 3 or Low, Medium, High, Critical"
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
                 />
               </div>
             )}
@@ -248,8 +243,8 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   type="text"
                   value={newPlaceholder}
                   onChange={(e) => setNewPlaceholder(e.target.value)}
-                  placeholder="e.g. Enter PO code..."
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                  placeholder="e.g. Enter details..."
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
                 />
               </div>
             )}
@@ -261,7 +256,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   type="checkbox"
                   checked={newRequired}
                   onChange={(e) => setNewRequired(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span>Mark as required field</span>
               </label>
@@ -269,14 +264,14 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
           </div>
 
           {/* Action buttons */}
-          <div className="mt-3.5 flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
             <button
               type="button"
               onClick={() => {
                 setIsAddingField(false);
                 setError(null);
               }}
-              className="px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors"
+              className="px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -284,7 +279,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
               type="button"
               id="btn-confirm-add-field"
               onClick={handleAddField}
-              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Check className="w-3.5 h-3.5" />
               <span>Confirm & Add Field</span>
@@ -293,42 +288,33 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
         </div>
       )}
 
-      {/* Render Current Custom Fields List */}
-      {fields.length > 0 ? (
-        <div className={`mt-3 grid grid-cols-1 ${compact ? 'gap-2.5' : 'sm:grid-cols-2 gap-3'}`}>
+      {/* Render Current Custom Fields List — Perfectly matching native form styling */}
+      {fields.length > 0 && (
+        <div className={`grid grid-cols-1 ${compact ? 'gap-3' : 'sm:grid-cols-2 gap-4'}`}>
           {fields.map((field) => (
             <div
               key={field.id}
-              className={`p-2.5 rounded-lg border bg-white shadow-2xs relative group transition-all ${
-                field.type === 'textarea' ? 'sm:col-span-2' : ''
-              } border-slate-200 hover:border-slate-300`}
+              className={field.type === 'textarea' ? 'sm:col-span-2' : ''}
             >
-              {/* Field Label Header with Type Icon & Delete Button */}
-              <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 truncate">
-                  {field.type === 'text' && <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                  {field.type === 'number' && <Hash className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
-                  {field.type === 'date' && <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                  {field.type === 'select' && <ListFilter className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                  {field.type === 'boolean' && <CheckSquare className="w-3.5 h-3.5 text-purple-500 shrink-0" />}
-                  {field.type === 'textarea' && <AlignLeft className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                  <span className="truncate">{field.label}</span>
-                  {field.required && <span className="text-rose-500">*</span>}
+              {/* Field Label Header with Delete Button */}
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 truncate">
+                  {field.label} {field.required && <span className="text-rose-500">*</span>}
                 </label>
 
                 {isAdmin && (
                   <button
                     type="button"
                     onClick={() => handleRemoveField(field.id)}
-                    className="opacity-60 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all cursor-pointer"
+                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                     title={`Delete field "${field.label}"`}
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* Input Renderers based on Field Type */}
+              {/* Native Input Renderers */}
               {field.type === 'text' && (
                 <input
                   type="text"
@@ -336,7 +322,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   onChange={(e) => handleFieldValueChange(field.id, e.target.value)}
                   placeholder={field.placeholder || `Enter ${field.label}...`}
                   required={field.required}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50 hover:bg-white transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 hover:bg-white transition-colors"
                 />
               )}
 
@@ -347,7 +333,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   onChange={(e) => handleFieldValueChange(field.id, e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder={field.placeholder || `Enter ${field.label}...`}
                   required={field.required}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50 hover:bg-white transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 hover:bg-white transition-colors"
                 />
               )}
 
@@ -357,7 +343,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   value={field.value ?? ''}
                   onChange={(e) => handleFieldValueChange(field.id, e.target.value)}
                   required={field.required}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50 hover:bg-white transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 hover:bg-white transition-colors"
                 />
               )}
 
@@ -366,7 +352,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                   value={field.value ?? ''}
                   onChange={(e) => handleFieldValueChange(field.id, e.target.value)}
                   required={field.required}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50 hover:bg-white transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 hover:bg-white transition-colors"
                 >
                   <option value="">-- Select {field.label} --</option>
                   {(field.options || []).map((opt) => (
@@ -378,14 +364,14 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
               )}
 
               {field.type === 'boolean' && (
-                <label className="flex items-center gap-2 py-1 cursor-pointer select-none">
+                <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/30 cursor-pointer select-none hover:bg-white transition-colors">
                   <input
                     type="checkbox"
                     checked={Boolean(field.value)}
                     onChange={(e) => handleFieldValueChange(field.id, e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span className="text-xs text-slate-700">
+                  <span className="text-xs font-medium text-slate-700">
                     {field.value ? 'Yes / Enabled' : 'No / Disabled'}
                   </span>
                 </label>
@@ -395,28 +381,15 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                 <textarea
                   value={field.value ?? ''}
                   onChange={(e) => handleFieldValueChange(field.id, e.target.value)}
-                  placeholder={field.placeholder || `Enter notes for ${field.label}...`}
+                  placeholder={field.placeholder || `Enter ${field.label}...`}
                   rows={2}
                   required={field.required}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50/50 hover:bg-white transition-colors resize-y"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-slate-50/30 resize-none hover:bg-white transition-colors"
                 />
               )}
             </div>
           ))}
         </div>
-      ) : (
-        !isAddingField && (
-          <div className="mt-2 text-center py-3 px-2 border border-dashed border-slate-200 rounded-lg bg-white/50">
-            <p className="text-xs text-slate-400">
-              No custom fields added yet.
-              {isAdmin && (
-                <span className="block mt-0.5 text-[11px] text-purple-600 font-medium">
-                  Click <strong>+ Add Field</strong> above to configure custom data inputs for this form.
-                </span>
-              )}
-            </p>
-          </div>
-        )
       )}
     </div>
   );

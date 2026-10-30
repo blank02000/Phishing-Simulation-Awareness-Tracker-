@@ -9,6 +9,7 @@ import {
   UserRole,
   CustomerProducts,
   LmsDeliverable,
+  DeliverableCategory,
   DeliverableFrequency,
   LicenseDetails,
   AuthSession,
@@ -23,6 +24,8 @@ import {
   NotesCustomizationConfig,
   LicenseCustomizationConfig,
   CustomerLicenseFile,
+  PlannedDeliverableRequirement,
+  ActualDeliveryRecord,
 } from '../types';
 import { INITIAL_USERS, INITIAL_CUSTOMERS } from '../data/seedData';
 import {
@@ -180,6 +183,7 @@ interface CustomerContextType {
     year: number,
     data: {
       title: string;
+      type?: DeliverableCategory | string;
       frequency: DeliverableFrequency;
       plannedDate: string;
       targetAudience?: string;
@@ -240,6 +244,32 @@ interface CustomerContextType {
     licenseId: string,
     additionalMonths: number
   ) => boolean;
+
+  // ProLMS Deliverables & Tracking
+  allPlannedDeliverables: PlannedDeliverableRequirement[];
+  allActualDeliveries: ActualDeliveryRecord[];
+  addPlannedDeliverable: (
+    data: Omit<PlannedDeliverableRequirement, 'id' | 'createdAt'>
+  ) => PlannedDeliverableRequirement;
+  updatePlannedDeliverable: (
+    id: string,
+    partial: Partial<PlannedDeliverableRequirement>
+  ) => boolean;
+  deletePlannedDeliverable: (id: string) => boolean;
+  recordActualDelivery: (
+    data: Omit<ActualDeliveryRecord, 'id' | 'createdAt'>
+  ) => ActualDeliveryRecord;
+  updateActualDelivery: (
+    id: string,
+    partial: Partial<ActualDeliveryRecord>
+  ) => boolean;
+  deleteActualDelivery: (id: string) => boolean;
+  bulkImportPlannedDeliverables: (
+    items: PlannedDeliverableRequirement[]
+  ) => { added: number; updated: number };
+  bulkImportActualDeliveries: (
+    items: ActualDeliveryRecord[]
+  ) => { added: number; updated: number };
 }
 
 const STORAGE_KEY = 'cyberdrill_customers_v4';
@@ -1586,6 +1616,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     year: number,
     data: {
       title: string;
+      type?: DeliverableCategory | string;
       frequency: DeliverableFrequency;
       plannedDate: string;
       targetAudience?: string;
@@ -1605,6 +1636,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         const newDel: LmsDeliverable = {
           id: `deliv-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           title: data.title.trim(),
+          type: data.type || undefined,
           frequency: data.frequency,
           plannedDate: data.plannedDate,
           status: 'Upcoming',
@@ -2305,6 +2337,388 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     return found;
   };
 
+  // ProLMS Deliverables & Tracking
+  const allPlannedDeliverables = useMemo(() => {
+    const list: PlannedDeliverableRequirement[] = [];
+    allCustomers.forEach((cust) => {
+      cust.licenses?.forEach((lic) => {
+        if (lic.plannedDeliverables) {
+          list.push(...lic.plannedDeliverables);
+        }
+      });
+    });
+    return list;
+  }, [allCustomers]);
+
+  const allActualDeliveries = useMemo(() => {
+    const list: ActualDeliveryRecord[] = [];
+    allCustomers.forEach((cust) => {
+      cust.licenses?.forEach((lic) => {
+        if (lic.actualDeliveries) {
+          list.push(...lic.actualDeliveries);
+        }
+      });
+    });
+    return list;
+  }, [allCustomers]);
+
+  const addPlannedDeliverable = (
+    data: Omit<PlannedDeliverableRequirement, 'id' | 'createdAt'>
+  ): PlannedDeliverableRequirement => {
+    const now = new Date().toISOString();
+    const newRequirement: PlannedDeliverableRequirement = {
+      ...data,
+      id: `deliv-req-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === data.customerId) {
+          const updatedLicenses = (c.licenses || []).map((lic) => {
+            if (lic.id === data.licenseId || (!data.licenseId && lic === c.licenses?.[0])) {
+              return {
+                ...lic,
+                plannedDeliverables: [newRequirement, ...(lic.plannedDeliverables || [])],
+              };
+            }
+            return lic;
+          });
+
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+
+    return newRequirement;
+  };
+
+  const updatePlannedDeliverable = (
+    id: string,
+    partial: Partial<PlannedDeliverableRequirement>
+  ): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        let customerModified = false;
+        const updatedLicenses = (c.licenses || []).map((lic) => {
+          if (lic.plannedDeliverables?.some((req) => req.id === id)) {
+            customerModified = true;
+            found = true;
+            const updatedReqs = lic.plannedDeliverables.map((req) =>
+              req.id === id ? { ...req, ...partial, updatedAt: now } : req
+            );
+            return {
+              ...lic,
+              plannedDeliverables: updatedReqs,
+            };
+          }
+          return lic;
+        });
+
+        if (customerModified) {
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+
+    return found;
+  };
+
+  const deletePlannedDeliverable = (id: string): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        let customerModified = false;
+        const updatedLicenses = (c.licenses || []).map((lic) => {
+          if (lic.plannedDeliverables?.some((req) => req.id === id)) {
+            customerModified = true;
+            found = true;
+            return {
+              ...lic,
+              plannedDeliverables: lic.plannedDeliverables.filter((req) => req.id !== id),
+            };
+          }
+          return lic;
+        });
+
+        if (customerModified) {
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+
+    return found;
+  };
+
+  const recordActualDelivery = (
+    data: Omit<ActualDeliveryRecord, 'id' | 'createdAt'>
+  ): ActualDeliveryRecord => {
+    const now = new Date().toISOString();
+    const newDelivery: ActualDeliveryRecord = {
+      ...data,
+      id: `deliv-actual-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === data.customerId) {
+          const updatedLicenses = (c.licenses || []).map((lic) => {
+            if (lic.id === data.licenseId || (!data.licenseId && lic === c.licenses?.[0])) {
+              return {
+                ...lic,
+                actualDeliveries: [newDelivery, ...(lic.actualDeliveries || [])],
+              };
+            }
+            return lic;
+          });
+
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+
+    return newDelivery;
+  };
+
+  const updateActualDelivery = (
+    id: string,
+    partial: Partial<ActualDeliveryRecord>
+  ): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        let customerModified = false;
+        const updatedLicenses = (c.licenses || []).map((lic) => {
+          if (lic.actualDeliveries?.some((del) => del.id === id)) {
+            customerModified = true;
+            found = true;
+            const updatedDels = lic.actualDeliveries.map((del) =>
+              del.id === id ? { ...del, ...partial, updatedAt: now } : del
+            );
+            return {
+              ...lic,
+              actualDeliveries: updatedDels,
+            };
+          }
+          return lic;
+        });
+
+        if (customerModified) {
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+
+    return found;
+  };
+
+  const deleteActualDelivery = (id: string): boolean => {
+    let found = false;
+    const now = new Date().toISOString();
+
+    setAllCustomers((prev) =>
+      prev.map((c) => {
+        let customerModified = false;
+        const updatedLicenses = (c.licenses || []).map((lic) => {
+          if (lic.actualDeliveries?.some((del) => del.id === id)) {
+            customerModified = true;
+            found = true;
+            return {
+              ...lic,
+              actualDeliveries: lic.actualDeliveries.filter((del) => del.id !== id),
+            };
+          }
+          return lic;
+        });
+
+        if (customerModified) {
+          const updatedCust: Customer = {
+            ...c,
+            licenses: updatedLicenses,
+            updatedAt: now,
+          };
+          persistCustomer(updatedCust);
+          return updatedCust;
+        }
+        return c;
+      })
+    );
+
+    return found;
+  };
+
+  const bulkImportPlannedDeliverables = (
+    items: PlannedDeliverableRequirement[]
+  ): { added: number; updated: number } => {
+    let added = 0;
+    let updated = 0;
+    const now = new Date().toISOString();
+
+    setAllCustomers((prev) => {
+      return prev.map((cust) => {
+        const matchingItems = items.filter((it) => it.customerId === cust.id);
+        if (matchingItems.length === 0) return cust;
+
+        const updatedLicenses = (cust.licenses || []).map((lic) => {
+          const licItems = matchingItems.filter(
+            (it) => it.licenseId === lic.id || (!it.licenseId && lic === cust.licenses?.[0])
+          );
+          if (licItems.length === 0) return lic;
+
+          const currentReqs = [...(lic.plannedDeliverables || [])];
+          licItems.forEach((newItem) => {
+            const existingIdx = currentReqs.findIndex(
+              (r) =>
+                r.id === newItem.id ||
+                (r.title.toLowerCase() === newItem.title.toLowerCase() &&
+                  r.category === newItem.category &&
+                  r.frequency === newItem.frequency)
+            );
+            if (existingIdx >= 0) {
+              currentReqs[existingIdx] = {
+                ...currentReqs[existingIdx],
+                ...newItem,
+                updatedAt: now,
+              };
+              updated++;
+            } else {
+              currentReqs.unshift({
+                ...newItem,
+                id: newItem.id || `deliv-req-import-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                createdAt: now,
+                updatedAt: now,
+              });
+              added++;
+            }
+          });
+
+          return {
+            ...lic,
+            plannedDeliverables: currentReqs,
+          };
+        });
+
+        const updatedCust: Customer = {
+          ...cust,
+          licenses: updatedLicenses,
+          updatedAt: now,
+        };
+        persistCustomer(updatedCust);
+        return updatedCust;
+      });
+    });
+
+    return { added, updated };
+  };
+
+  const bulkImportActualDeliveries = (
+    items: ActualDeliveryRecord[]
+  ): { added: number; updated: number } => {
+    let added = 0;
+    let updated = 0;
+    const now = new Date().toISOString();
+
+    setAllCustomers((prev) => {
+      return prev.map((cust) => {
+        const matchingItems = items.filter((it) => it.customerId === cust.id);
+        if (matchingItems.length === 0) return cust;
+
+        const updatedLicenses = (cust.licenses || []).map((lic) => {
+          const licItems = matchingItems.filter(
+            (it) => it.licenseId === lic.id || (!it.licenseId && lic === cust.licenses?.[0])
+          );
+          if (licItems.length === 0) return lic;
+
+          const currentDeliveries = [...(lic.actualDeliveries || [])];
+          licItems.forEach((newDel) => {
+            const existingIdx = currentDeliveries.findIndex(
+              (d) =>
+                d.id === newDel.id ||
+                (d.fileName.toLowerCase() === newDel.fileName.toLowerCase() &&
+                  d.reportingPeriodKey === newDel.reportingPeriodKey)
+            );
+            if (existingIdx >= 0) {
+              currentDeliveries[existingIdx] = {
+                ...currentDeliveries[existingIdx],
+                ...newDel,
+                updatedAt: now,
+              };
+              updated++;
+            } else {
+              currentDeliveries.unshift({
+                ...newDel,
+                id: newDel.id || `deliv-act-import-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                createdAt: now,
+                updatedAt: now,
+              });
+              added++;
+            }
+          });
+
+          return {
+            ...lic,
+            actualDeliveries: currentDeliveries,
+          };
+        });
+
+        const updatedCust: Customer = {
+          ...cust,
+          licenses: updatedLicenses,
+          updatedAt: now,
+        };
+        persistCustomer(updatedCust);
+        return updatedCust;
+      });
+    });
+
+    return { added, updated };
+  };
+
   return (
     <CustomerContext.Provider
       value={{
@@ -2379,6 +2793,16 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         addCustomerLicense,
         deleteCustomerLicense,
         renewCustomerLicense,
+        allPlannedDeliverables,
+        allActualDeliveries,
+        addPlannedDeliverable,
+        updatePlannedDeliverable,
+        deletePlannedDeliverable,
+        recordActualDelivery,
+        updateActualDelivery,
+        deleteActualDelivery,
+        bulkImportPlannedDeliverables,
+        bulkImportActualDeliveries,
       }}
     >
       {children}

@@ -195,9 +195,106 @@ export type DeliverableStatus =
   | 'Not Completed'
   | 'Cancelled';
 
+// ProLMS Deliverables Taxonomy
+export type DeliverableCategory =
+  | 'Infographics'
+  | 'Posters'
+  | 'Wallpapers'
+  | 'Videos'
+  | 'SCORM content'
+  | 'Games'
+  | 'Other';
+
+export type DeliverableFileFormat =
+  | 'MP4'
+  | 'PNG'
+  | 'JPG'
+  | 'JPEG'
+  | 'PDF'
+  | 'PPT'
+  | 'PPTX'
+  | 'SCORM'
+  | 'HTML'
+  | 'ZIP'
+  | 'Other';
+
+export type DeliverableDeliveryMode =
+  | 'Email'
+  | 'Email Campaign'
+  | 'LMS'
+  | 'Client Portal'
+  | 'Teams'
+  | 'Shared Drive'
+  | 'Meeting'
+  | 'Other';
+
+export type DeliverableTrackingFrequency =
+  | 'Monthly'
+  | 'Quarterly'
+  | 'Half-Yearly'
+  | 'Yearly';
+
+export type DeliverablePeriodStatus =
+  | 'Not Started'
+  | 'In Progress'
+  | 'Completed'
+  | 'Overdue'
+  | 'Not Applicable';
+
+export interface PlannedDeliverableRequirement {
+  id: string;
+  customerId: string;
+  customerName?: string;
+  licenseId: string;
+  licenseKey?: string;
+  category: DeliverableCategory;
+  customCategoryName?: string;
+  title: string;
+  frequency: DeliverableTrackingFrequency;
+  targetQuantityPerPeriod: number; // Target quantity per reporting period (e.g. 4 per quarter)
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
+  csmId?: string;
+  csmName?: string;
+  status: 'Active' | 'Inactive';
+  year: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ActualDeliveryRecord {
+  id: string;
+  requirementId?: string; // Optional linkage to PlannedDeliverableRequirement
+  customerId: string;
+  customerName?: string;
+  licenseId: string;
+  licenseKey?: string;
+  category: DeliverableCategory;
+  customCategoryName?: string;
+  title: string;
+  fileName: string; // e.g. "October_Cybersecurity_Awareness.mp4"
+  fileFormat: DeliverableFileFormat;
+  deliveryMode: DeliverableDeliveryMode;
+  dateShared: string; // YYYY-MM-DD
+  frequency: DeliverableTrackingFrequency;
+  reportingPeriodKey: string; // e.g. "2026-Q1", "2026-M04", "2026-H1", "2026-FY"
+  reportingPeriodLabel: string; // e.g. "Q1 2026", "April 2026", "H1 2026", "2026 Full Year"
+  reportingPeriodStartDate: string;
+  reportingPeriodEndDate: string;
+  csmId?: string;
+  csmName?: string;
+  referenceUrl?: string;
+  remarks?: string;
+  quantity?: number; // usually 1
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface LmsDeliverable {
   id: string;
   title: string;
+  type?: DeliverableCategory | string; // Category / Type of deliverable (Infographics, Posters, Wallpapers, Videos, SCORM, Games, etc.)
   frequency: DeliverableFrequency;
   plannedDate: string; // YYYY-MM-DD
   actualCompletionDate?: string; // YYYY-MM-DD
@@ -324,6 +421,8 @@ export interface CustomerLicenseFile {
   smishingQuota?: number;
   phishingQuota?: number;
   gamificationQuota?: number;
+  plannedDeliverables?: PlannedDeliverableRequirement[];
+  actualDeliveries?: ActualDeliveryRecord[];
 }
 
 export type FormFieldSection =
