@@ -15,6 +15,7 @@ import {
   Sliders,
   CheckSquare,
   GraduationCap,
+  Settings,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -93,6 +94,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           },
         ]
       : []),
+    {
+      id: 'settings' as NavTab,
+      label: 'SMTP & Settings',
+      icon: <Settings className="w-5 h-5" />,
+    },
   ];
 
   return (

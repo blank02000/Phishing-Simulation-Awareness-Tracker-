@@ -173,6 +173,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         {activeTab === 'customization' && (
           <span className="text-slate-900 font-bold">Form & Account Customization Studio</span>
         )}
+
+        {activeTab === 'settings' && (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-900 font-bold">SMTP Mail Server & Security Settings</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+              AES-256-GCM Encrypted
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Right: Role Switcher, Reference Date & Actions */}

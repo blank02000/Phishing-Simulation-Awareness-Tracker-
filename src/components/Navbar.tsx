@@ -27,7 +27,8 @@ export type NavTab =
   | 'reports'
   | 'reviews'
   | 'team'
-  | 'customization';
+  | 'customization'
+  | 'settings';
 
 interface NavbarProps {
   activeTab: NavTab;

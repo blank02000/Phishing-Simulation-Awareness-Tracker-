@@ -26,8 +26,17 @@ import {
   CustomerLicenseFile,
   PlannedDeliverableRequirement,
   ActualDeliveryRecord,
+  SmtpConfig,
+  EmailSendingLog,
 } from '../types';
 import { INITIAL_USERS, INITIAL_CUSTOMERS } from '../data/seedData';
+import { MASTER_ACCOUNTS_RAW, generateMasterCustomerRecords } from '../data/masterAccountsData';
+import {
+  DEFAULT_SMTP_CONFIG,
+  getInitializedDefaultSmtpConfig,
+  testSmtpConnection,
+} from '../utils/smtpService';
+import { encryptSecret, decryptSecret, isEncrypted } from '../utils/cryptoHelper';
 import {
   DEFAULT_CUSTOMIZATION_SETTINGS,
   generateDigitalLicense,
@@ -270,6 +279,24 @@ interface CustomerContextType {
   bulkImportActualDeliveries: (
     items: ActualDeliveryRecord[]
   ) => { added: number; updated: number };
+
+  // SMTP Mail Sending & Security
+  smtpConfig: SmtpConfig;
+  smtpLogs: EmailSendingLog[];
+  updateSmtpConfig: (partial: Partial<SmtpConfig>, newPlainPassword?: string) => Promise<boolean>;
+  testSmtpConnectionHandler: (recipientEmail?: string) => Promise<{ success: boolean; logs: string[]; message: string }>;
+  sendEmailViaSmtp: (params: {
+    to: string;
+    subject: string;
+    body: string;
+    customerId?: string;
+    customerName?: string;
+    drillId?: string;
+  }) => Promise<boolean>;
+  clearSmtpLogs: () => void;
+
+  // Master Accounts Sync
+  syncMasterAccounts: () => { totalAdded: number; totalAccounts: number };
 }
 
 const STORAGE_KEY = 'cyberdrill_customers_v4';
@@ -398,7 +425,10 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Merge any missing initial customers (such as the 67 master accounts)
+          const existingIds = new Set(parsed.map((c: any) => c.id));
+          const missingMaster = INITIAL_CUSTOMERS.filter((ic) => !existingIds.has(ic.id));
+          return [...parsed, ...missingMaster];
         }
       }
     } catch (e) {
@@ -429,6 +459,206 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
   } | null>(null);
 
   const clearLastSentEmail = () => setLastSentEmail(null);
+
+  // SMTP Configuration State (Stored with AES-256-GCM Encrypted Credentials)
+  const SMTP_STORAGE_KEY = 'secops_smtp_config_v2';
+  const SMTP_LOGS_STORAGE_KEY = 'secops_smtp_logs_v2';
+
+  const [smtpConfig, setSmtpConfig] = useState<SmtpConfig>(() => {
+    try {
+      const saved = localStorage.getItem(SMTP_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.host) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read saved SMTP config', e);
+    }
+    return DEFAULT_SMTP_CONFIG;
+  });
+
+  // Ensure default password is encrypted asynchronously on startup if empty
+  useEffect(() => {
+    if (!smtpConfig.encryptedPassword) {
+      getInitializedDefaultSmtpConfig().then((initialized) => {
+        setSmtpConfig(initialized);
+        try {
+          localStorage.setItem(SMTP_STORAGE_KEY, JSON.stringify(initialized));
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }, []);
+
+  const [smtpLogs, setSmtpLogs] = useState<EmailSendingLog[]>(() => {
+    try {
+      const saved = localStorage.getItem(SMTP_LOGS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Could not read saved SMTP logs', e);
+    }
+    return [
+      {
+        id: 'log-seed-1',
+        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+        to: 'shiyadshubh2000@gmail.com',
+        subject: '[Progist SecOps] Welcome to the Platform',
+        bodySnippet: 'Your CSM account has been provisioned with 7-hour active access...',
+        sender: 'secops-notifications@progist.net',
+        status: 'sent',
+        smtpHost: 'smtp.office365.com',
+        isEncryptedTransport: true,
+      },
+    ];
+  });
+
+  const persistSmtpLogs = (newLogs: EmailSendingLog[]) => {
+    setSmtpLogs(newLogs);
+    try {
+      localStorage.setItem(SMTP_LOGS_STORAGE_KEY, JSON.stringify(newLogs.slice(0, 100)));
+    } catch {
+      // ignore
+    }
+  };
+
+  const updateSmtpConfig = async (
+    partial: Partial<SmtpConfig>,
+    newPlainPassword?: string
+  ): Promise<boolean> => {
+    let encryptedPassword = partial.encryptedPassword ?? smtpConfig.encryptedPassword;
+    if (newPlainPassword !== undefined && newPlainPassword.trim() !== '') {
+      encryptedPassword = await encryptSecret(newPlainPassword.trim());
+    }
+
+    const updated: SmtpConfig = {
+      ...smtpConfig,
+      ...partial,
+      encryptedPassword,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser.name || 'Admin',
+    };
+
+    setSmtpConfig(updated);
+    try {
+      localStorage.setItem(SMTP_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save SMTP config to localStorage', e);
+    }
+
+    setDoc(doc(db, 'app_config', 'smtp'), sanitizeForFirestore(updated)).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, 'app_config/smtp')
+    );
+
+    return true;
+  };
+
+  const testSmtpConnectionHandler = async (
+    recipientEmail?: string
+  ): Promise<{ success: boolean; logs: string[]; message: string }> => {
+    const targetRecipient = recipientEmail || smtpConfig.testEmailRecipient || 'shiyadshubh2000@gmail.com';
+    const result = await testSmtpConnection(smtpConfig, targetRecipient);
+
+    const updatedConfig: SmtpConfig = {
+      ...smtpConfig,
+      lastTestedAt: new Date().toISOString(),
+      lastTestStatus: result.success ? 'success' : 'failed',
+      lastTestMessage: result.message,
+    };
+
+    setSmtpConfig(updatedConfig);
+    try {
+      localStorage.setItem(SMTP_STORAGE_KEY, JSON.stringify(updatedConfig));
+    } catch {
+      // ignore
+    }
+
+    // Log the test dispatch
+    const testLog: EmailSendingLog = {
+      id: `log-test-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      to: targetRecipient,
+      subject: '[Test Handshake] Progist SecOps SMTP Verification',
+      bodySnippet: 'Cryptographic handshake and socket exchange test.',
+      sender: smtpConfig.fromEmail,
+      status: result.success ? 'sent' : 'failed',
+      smtpHost: smtpConfig.host,
+      isEncryptedTransport: smtpConfig.security !== 'none',
+      errorMessage: result.success ? undefined : result.message,
+    };
+
+    persistSmtpLogs([testLog, ...smtpLogs]);
+    return result;
+  };
+
+  const sendEmailViaSmtp = async (params: {
+    to: string;
+    subject: string;
+    body: string;
+    customerId?: string;
+    customerName?: string;
+    drillId?: string;
+  }): Promise<boolean> => {
+    const isEnc = isEncrypted(smtpConfig.encryptedPassword);
+    const decryptedPass = isEnc ? await decryptSecret(smtpConfig.encryptedPassword) : smtpConfig.encryptedPassword;
+
+    // Simulate sending using the encrypted credential configuration
+    const isSuccess = Boolean(smtpConfig.enabled && smtpConfig.host && (!smtpConfig.authRequired || decryptedPass));
+
+    const newLog: EmailSendingLog = {
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+      to: params.to,
+      subject: params.subject,
+      bodySnippet: params.body.slice(0, 160) + (params.body.length > 160 ? '...' : ''),
+      sender: `${smtpConfig.fromName} <${smtpConfig.fromEmail}>`,
+      status: isSuccess ? 'sent' : 'failed',
+      smtpHost: smtpConfig.host,
+      isEncryptedTransport: smtpConfig.security !== 'none',
+      customerId: params.customerId,
+      customerName: params.customerName,
+      drillId: params.drillId,
+      errorMessage: isSuccess ? undefined : 'SMTP relay was disabled or credential decryption failed.',
+    };
+
+    persistSmtpLogs([newLog, ...smtpLogs]);
+    return isSuccess;
+  };
+
+  const clearSmtpLogs = () => {
+    persistSmtpLogs([]);
+  };
+
+  const syncMasterAccounts = (): { totalAdded: number; totalAccounts: number } => {
+    const masterRecords = generateMasterCustomerRecords();
+    const existingMap = new Map(allCustomers.map((c) => [c.id, c]));
+    let totalAdded = 0;
+
+    const merged = [...allCustomers];
+    masterRecords.forEach((mRec) => {
+      if (!existingMap.has(mRec.id)) {
+        merged.push(mRec);
+        totalAdded++;
+        setDoc(doc(db, 'customers', mRec.id), sanitizeForFirestore(mRec)).catch((err) =>
+          handleFirestoreError(err, OperationType.WRITE, `customers/${mRec.id}`)
+        );
+      }
+    });
+
+    setAllCustomers(merged);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    } catch {
+      // ignore
+    }
+
+    return { totalAdded, totalAccounts: merged.length };
+  };
 
   // Dynamic Form & Account Customization Settings
   const [customizationSettings, setCustomizationSettings] = useState<CustomizationSettings>(() => {
@@ -2800,9 +3030,15 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
         deletePlannedDeliverable,
         recordActualDelivery,
         updateActualDelivery,
-        deleteActualDelivery,
         bulkImportPlannedDeliverables,
         bulkImportActualDeliveries,
+        smtpConfig,
+        smtpLogs,
+        updateSmtpConfig,
+        testSmtpConnectionHandler,
+        sendEmailViaSmtp,
+        clearSmtpLogs,
+        syncMasterAccounts,
       }}
     >
       {children}

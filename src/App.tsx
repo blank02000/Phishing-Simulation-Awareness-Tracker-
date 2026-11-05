@@ -19,6 +19,7 @@ import { CsmManagementView } from './components/CsmManagementView';
 import { CustomizationView } from './components/CustomizationView';
 import { TaskBoard } from './components/TaskBoard';
 import { ProLmsDeliverableTrackerView } from './components/prolms/ProLmsDeliverableTrackerView';
+import { SmtpSettingsView } from './components/settings/SmtpSettingsView';
 
 import { CreateCustomerModal } from './components/modals/CreateCustomerModal';
 import { EditCustomerModal } from './components/modals/EditCustomerModal';
@@ -353,6 +354,10 @@ function MainApp() {
 
                 {activeTab === 'customization' && (
                   <CustomizationView />
+                )}
+
+                {activeTab === 'settings' && (
+                  <SmtpSettingsView />
                 )}
               </>
             )}

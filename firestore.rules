@@ -24,6 +24,11 @@ service cloud.firestore {
       allow delete: if isValidId(userId);
     }
 
+    // App configuration (customization, dynamic forms, SMTP relay settings)
+    match /app_config/{docId} {
+      allow read, write: if isValidId(docId);
+    }
+
     // Customer accounts collection
     match /customers/{customerId} {
       allow list: if true;

@@ -1,4 +1,5 @@
 import { Customer, UserAccount, DEFAULT_ADMIN_PERMISSIONS, DEFAULT_CSM_PERMISSIONS } from '../types';
+import { generateMasterCustomerRecords } from './masterAccountsData';
 
 export const INITIAL_USERS: UserAccount[] = [
   {
@@ -63,6 +64,28 @@ export const INITIAL_USERS: UserAccount[] = [
     role: 'CSM',
     title: 'Customer Success Manager',
     avatarColor: 'bg-rose-600',
+    status: 'Active',
+    permissions: DEFAULT_CSM_PERMISSIONS,
+    createdAt: '2026-01-01T08:00:00Z',
+  },
+  {
+    id: 'user-csm-nikhil',
+    name: 'Nikhil Sharma',
+    email: 'nikhil.sharma@progist.net',
+    role: 'CSM',
+    title: 'Customer Success Manager',
+    avatarColor: 'bg-cyan-600',
+    status: 'Active',
+    permissions: DEFAULT_CSM_PERMISSIONS,
+    createdAt: '2026-01-01T08:00:00Z',
+  },
+  {
+    id: 'user-csm-lakshmi',
+    name: 'Lakshmi Narayan',
+    email: 'lakshmi.narayan@progist.net',
+    role: 'CSM',
+    title: 'Customer Success Manager',
+    avatarColor: 'bg-violet-600',
     status: 'Active',
     permissions: DEFAULT_CSM_PERMISSIONS,
     createdAt: '2026-01-01T08:00:00Z',
@@ -631,4 +654,6 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     createdAt: '2026-01-01T08:00:00Z',
     updatedAt: '2026-03-22T16:45:00.000Z',
   },
+  ...generateMasterCustomerRecords(),
 ];
+

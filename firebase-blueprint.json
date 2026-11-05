@@ -171,6 +171,14 @@
         "$ref": "#/entities/Customer"
       },
       "description": "Stores customer accounts, drill plans, and completion logs"
+    },
+    "/app_config/{docId}": {
+      "schema": {
+        "title": "AppConfig",
+        "description": "Platform configuration documents (customization, dynamic forms, SMTP relay settings)",
+        "type": "object"
+      },
+      "description": "Stores global application settings and form customizations"
     }
   }
 }
